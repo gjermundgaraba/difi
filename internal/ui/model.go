@@ -34,6 +34,11 @@ type StatsMsg struct {
 	ByFile  map[string][2]int
 }
 
+type FileListMsg struct {
+	Files []string
+	Err   error
+}
+
 type Model struct {
 	fileList     list.Model
 	treeState    *tree.FileTree
@@ -53,12 +58,15 @@ type Model struct {
 
 	fileStats map[string][2]int // per-file [added, deleted]
 
-	diffContent string
-	diffLines   []string
-	diffCursor  int
+	diffContent    string
+	diffLines      []string
+	rawDiffContent string
+	rawDiffLines   []string
+	diffCursor     int
 
-	inputBuffer string
-	pendingZ    bool
+	inputBuffer   string
+	pendingZ      bool
+	statusMessage string
 
 	focus    Focus
 	showHelp bool
@@ -126,12 +134,8 @@ func (m Model) Init() tea.Cmd {
 	var cmds []tea.Cmd
 
 	if m.selectedPath != "" {
-		if m.pipedDiff != "" {
-			cmds = append(cmds, func() tea.Msg {
-				return vcs.DiffMsg{Content: m.vcs.ExtractFileDiff(m.pipedDiff, m.selectedPath)}
-			})
-		} else {
-			cmds = append(cmds, m.vcs.DiffCmd(m.targetBranch, m.selectedPath))
+		if cmd := m.loadSelectedDiffCmd(); cmd != nil {
+			cmds = append(cmds, cmd)
 		}
 	}
 
@@ -194,6 +198,30 @@ func (m Model) computePipedStatsCmd() tea.Cmd {
 	}
 }
 
+func (m Model) listChangedFilesCmd(target string) tea.Cmd {
+	return func() tea.Msg {
+		files, err := m.vcs.ListChangedFiles(target)
+		return FileListMsg{Files: files, Err: err}
+	}
+}
+
+func (m Model) loadSelectedDiffCmd() tea.Cmd {
+	if m.selectedPath == "" {
+		return nil
+	}
+	if m.pipedDiff != "" {
+		return func() tea.Msg {
+			diff := m.vcs.ExtractFileDiff(m.pipedDiff, m.selectedPath)
+			return vcs.DiffMsg{Content: diff, RawContent: diff}
+		}
+	}
+	return m.vcs.DiffCmd(m.targetBranch, m.selectedPath)
+}
+
+func (m *Model) setStatus(msg string) {
+	m.statusMessage = msg
+}
+
 func (m *Model) getRepeatCount() int {
 	if m.inputBuffer == "" {
 		return 1
@@ -223,6 +251,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statsDeleted = msg.Deleted
 		if msg.ByFile != nil {
 			m.fileStats = msg.ByFile
+		}
+
+	case FileListMsg:
+		if msg.Err != nil {
+			m.setStatus("Failed to refresh changed files: " + msg.Err.Error())
+			break
+		}
+		if cmd := m.applyFileList(msg.Files); cmd != nil {
+			cmds = append(cmds, cmd)
 		}
 
 	case tea.KeyMsg:
@@ -301,13 +338,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			if m.selectedPath != "" {
-				line := 0
-				if m.focus == FocusDiff {
-					line = m.vcs.CalculateFileLine(m.diffContent, m.diffCursor)
-				} else {
-					line = m.vcs.CalculateFileLine(m.diffContent, 0)
-				}
-				return m, m.vcs.OpenEditorCmd(m.selectedPath, line, m.targetBranch, m.treeDelegate.Config.Editor)
+				return m, m.vcs.OpenEditorCmd(m.selectedPath, m.editorLineNumber(), m.targetBranch, m.treeDelegate.Config.Editor)
 			}
 
 		case "e":
@@ -316,15 +347,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
-				line := 0
-				if m.focus == FocusDiff {
-					line = m.vcs.CalculateFileLine(m.diffContent, m.diffCursor)
-				} else {
-					line = m.vcs.CalculateFileLine(m.diffContent, 0)
-				}
 				m.inputBuffer = ""
-				return m, m.vcs.OpenEditorCmd(m.selectedPath, line, m.targetBranch, m.treeDelegate.Config.Editor)
+				return m, m.vcs.OpenEditorCmd(m.selectedPath, m.editorLineNumber(), m.targetBranch, m.treeDelegate.Config.Editor)
 			}
+
+		case "x":
+			m.inputBuffer = ""
+			if m.focus != FocusDiff {
+				break
+			}
+			if m.selectedPath == "" {
+				m.setStatus("No file selected to undo")
+				return m, nil
+			}
+			if m.pipedDiff != "" {
+				m.setStatus("Undo is unavailable for piped diffs")
+				return m, nil
+			}
+			if m.targetBranch != "HEAD" {
+				m.setStatus("Undo only works when comparing against HEAD")
+				return m, nil
+			}
+			undoer, ok := m.vcs.(vcs.ChangeUndoer)
+			if !ok {
+				m.setStatus("Undo is only supported for Git right now")
+				return m, nil
+			}
+			if m.diffCursor < 0 || m.diffCursor >= len(m.rawDiffLines) {
+				m.setStatus("Move the cursor to a changed line to undo it")
+				return m, nil
+			}
+			line := m.rawDiffLines[m.diffCursor]
+			if !strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "-") {
+				m.setStatus("Move the cursor to a changed line to undo it")
+				return m, nil
+			}
+			return m, undoer.UndoSelectedChangeCmd(m.targetBranch, m.selectedPath, m.rawDiffContent, m.diffCursor)
 
 		case "z":
 			if m.focus == FocusDiff {
@@ -387,7 +445,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if m.diffCursor < len(m.diffLines)-1 {
 						m.diffCursor++
 						if m.diffCursor >= m.diffViewport.YOffset+m.diffViewport.Height {
-							m.diffViewport.LineDown(1)
+							m.diffViewport.ScrollDown(1)
 						}
 					}
 				} else {
@@ -404,7 +462,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if m.diffCursor > 0 {
 						m.diffCursor--
 						if m.diffCursor < m.diffViewport.YOffset {
-							m.diffViewport.LineUp(1)
+							m.diffViewport.ScrollUp(1)
 						}
 					}
 				} else {
@@ -429,12 +487,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectedPath = item.FullPath
 				m.diffCursor = 0
 				m.diffViewport.GotoTop()
-				if m.pipedDiff != "" {
-					cmds = append(cmds, func() tea.Msg {
-						return vcs.DiffMsg{Content: m.vcs.ExtractFileDiff(m.pipedDiff, m.selectedPath)}
-					})
-				} else {
-					cmds = append(cmds, m.vcs.DiffCmd(m.targetBranch, m.selectedPath))
+				if cmd := m.loadSelectedDiffCmd(); cmd != nil {
+					cmds = append(cmds, cmd)
 				}
 			}
 		}
@@ -443,15 +497,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case vcs.DiffMsg:
 		fullLines := strings.Split(msg.Content, "\n")
+		rawFullLines := strings.Split(msg.RawContent, "\n")
 
 		var cleanLines []string
+		var rawLines []string
 		var added, deleted int
 		foundHunk := false
 
-		for _, line := range fullLines {
+		for idx, line := range fullLines {
 			cleanLine := stripAnsi(line)
+			rawLine := cleanLine
+			if idx < len(rawFullLines) {
+				rawLine = rawFullLines[idx]
+			}
 
-			if strings.HasPrefix(cleanLine, "@@") {
+			if strings.HasPrefix(rawLine, "@@") {
 				foundHunk = true
 			}
 
@@ -460,30 +520,45 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			cleanLines = append(cleanLines, line)
+			rawLines = append(rawLines, rawLine)
 
-			if strings.HasPrefix(cleanLine, "+") && !strings.HasPrefix(cleanLine, "+++") {
+			if strings.HasPrefix(rawLine, "+") && !strings.HasPrefix(rawLine, "+++") {
 				added++
-			} else if strings.HasPrefix(cleanLine, "-") && !strings.HasPrefix(cleanLine, "---") {
+			} else if strings.HasPrefix(rawLine, "-") && !strings.HasPrefix(rawLine, "---") {
 				deleted++
 			}
 		}
 
 		m.diffLines = cleanLines
+		m.rawDiffLines = rawLines
 		m.currentFileAdded = added
 		m.currentFileDeleted = deleted
 
 		newContent := strings.Join(cleanLines, "\n")
 		m.diffContent = newContent
+		m.rawDiffContent = msg.RawContent
 		m.diffViewport.SetContent(newContent)
 		m.diffViewport.GotoTop()
 
 	case vcs.EditorFinishedMsg:
-		if m.pipedDiff != "" {
-			return m, func() tea.Msg {
-				return vcs.DiffMsg{Content: m.vcs.ExtractFileDiff(m.pipedDiff, m.selectedPath)}
+		if cmd := m.loadSelectedDiffCmd(); cmd != nil {
+			return m, cmd
+		}
+
+	case vcs.UndoResultMsg:
+		if msg.Err != nil {
+			m.setStatus(msg.Err.Error())
+			break
+		}
+		if msg.Message != "" {
+			m.setStatus(msg.Message)
+		}
+		if msg.Changed {
+			cmds = append(cmds, m.listChangedFilesCmd(m.targetBranch))
+			if m.pipedDiff == "" {
+				cmds = append(cmds, m.fetchStatsCmd(m.targetBranch))
 			}
 		}
-		return m, m.vcs.DiffCmd(m.targetBranch, m.selectedPath)
 	}
 
 	return m, tea.Batch(cmds...)
@@ -496,6 +571,86 @@ func (m *Model) centerDiffCursor() {
 		targetOffset = 0
 	}
 	m.diffViewport.SetYOffset(targetOffset)
+}
+
+func (m *Model) applyFileList(files []string) tea.Cmd {
+	oldFileOrder := collectFilePaths(m.fileList.Items())
+	oldSelectedPath := m.selectedPath
+
+	m.treeState = tree.New(files)
+	items := m.treeState.Items()
+	m.fileList.SetItems(items)
+
+	if len(items) == 0 {
+		m.selectedPath = ""
+		m.diffContent = ""
+		m.diffLines = nil
+		m.rawDiffContent = ""
+		m.rawDiffLines = nil
+		m.currentFileAdded = 0
+		m.currentFileDeleted = 0
+		m.diffCursor = 0
+		m.diffViewport.SetContent("")
+		m.diffViewport.GotoTop()
+		return nil
+	}
+
+	newFileOrder := collectFilePaths(items)
+	m.selectedPath = chooseRefreshedPath(oldFileOrder, newFileOrder, oldSelectedPath)
+	selectItemByPath(&m.fileList, items, m.selectedPath)
+
+	m.diffCursor = 0
+	m.diffViewport.GotoTop()
+	return m.loadSelectedDiffCmd()
+}
+
+func collectFilePaths(items []list.Item) []string {
+	paths := make([]string, 0, len(items))
+	for _, item := range items {
+		ti, ok := item.(tree.TreeItem)
+		if !ok || ti.IsDir {
+			continue
+		}
+		paths = append(paths, ti.FullPath)
+	}
+	return paths
+}
+
+func chooseRefreshedPath(oldPaths, newPaths []string, oldSelectedPath string) string {
+	if len(newPaths) == 0 {
+		return ""
+	}
+
+	for _, path := range newPaths {
+		if path == oldSelectedPath {
+			return path
+		}
+	}
+
+	oldIndex := 0
+	for i, path := range oldPaths {
+		if path == oldSelectedPath {
+			oldIndex = i
+			break
+		}
+	}
+	if oldIndex >= len(newPaths) {
+		oldIndex = len(newPaths) - 1
+	}
+	if oldIndex < 0 {
+		oldIndex = 0
+	}
+	return newPaths[oldIndex]
+}
+
+func selectItemByPath(fileList *list.Model, items []list.Item, path string) {
+	for idx, item := range items {
+		ti, ok := item.(tree.TreeItem)
+		if ok && !ti.IsDir && ti.FullPath == path {
+			fileList.Select(idx)
+			return
+		}
+	}
 }
 
 func (m *Model) updateSizes() {
@@ -560,7 +715,7 @@ func (m Model) View() string {
 			treeStyle = FocusedPaneStyle
 		}
 
-		treeView := treeStyle.Copy().
+		treeView := treeStyle.
 			Width(m.fileList.Width()).
 			Height(m.fileList.Height()).
 			MaxHeight(m.fileList.Height() + 2). // cap height: content + border
@@ -641,7 +796,7 @@ func (m Model) View() string {
 
 			diffContentStr := "\n" + strings.TrimRight(renderedDiff.String(), "\n")
 
-			diffView := DiffStyle.Copy().
+			diffView := DiffStyle.
 				Width(m.diffViewport.Width).
 				Height(viewportHeight).
 				Render(diffContentStr)
@@ -746,7 +901,10 @@ func (m Model) renderTopBar() string {
 }
 
 func (m Model) viewStatusBar() string {
-	shortcuts := StatusKeyStyle.Render("? Help  q Quit  Tab Switch")
+	if m.statusMessage != "" {
+		return StatusBarStyle.Width(m.width).Render(StatusKeyStyle.Render(m.statusMessage))
+	}
+	shortcuts := StatusKeyStyle.Render("? Help  x Undo Hunk  q Quit  Tab Switch")
 	return StatusBarStyle.Width(m.width).Render(shortcuts)
 }
 
@@ -765,14 +923,14 @@ func (m Model) renderHelpDrawer() string {
 	)
 	col4 := lipgloss.JoinVertical(lipgloss.Left,
 		HelpTextStyle.Render("H/M/L Move Cursor"),
-		HelpTextStyle.Render("e     Edit File"),
+		HelpTextStyle.Render("e/x   Edit / Undo"),
 	)
 	col5 := lipgloss.JoinVertical(lipgloss.Left,
 		HelpTextStyle.Render("Supports Git & Hg"),
 		HelpTextStyle.Render("--vcs git/hg"),
 	)
 
-	return HelpDrawerStyle.Copy().
+	return HelpDrawerStyle.
 		Width(m.width).
 		Render(lipgloss.JoinHorizontal(lipgloss.Top,
 			col1,
@@ -858,6 +1016,13 @@ func (m Model) renderEmptyState(w, h int, statusMsg string) string {
 	)
 
 	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, content)
+}
+
+func (m Model) editorLineNumber() int {
+	if m.focus == FocusDiff {
+		return m.vcs.CalculateFileLine(m.diffContent, m.diffCursor)
+	}
+	return m.vcs.CalculateFileLine(m.diffContent, 0)
 }
 
 func stripAnsi(str string) string {

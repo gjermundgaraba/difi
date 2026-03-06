@@ -1,0 +1,23 @@
+  repo-with-a-very-long-name:git  feature ➜ HEAD +14 -7     
+very/long…  +14 -7                                          
+╭────────────────╮                                          
+│ ▾  very       │   1   -old                               
+│   ▾  long     │   2   +new                               
+│     ▾  path   │   3   +extra                             
+│       ▾  to   │   4                                      
+│         ▾  t… │                                          
+│           ▾ … │                                          
+│              … │                                          
+│                │                                          
+│                │                                          
+│                │                                          
+│                │                                          
+│                │                                          
+│                │                                          
+│                │                                          
+│                │                                          
+│                │                                          
+│                │                                          
+│                │                                          
+╰────────────────╯                                          
+ ? Help  x Undo Hunk  q Quit  Tab Switch                    

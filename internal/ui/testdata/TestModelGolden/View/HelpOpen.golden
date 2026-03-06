@@ -1,0 +1,28 @@
+  repo-with-a-very-long-name:git  feature ➜ HEAD                             src/app/main.go  +1 -1 
+╭────────────────╮                                                                                  
+│ ▾  docs       │   1   -old                                                                       
+│   ▾  sub      │   2   +new                                                                       
+│        api.go │   3                                                                              
+│      guide.md │                                                                                  
+│ ▾  src        │                                                                                  
+│   ▾  app      │                                                                                  
+│        main.… │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+╰────────────────╯                                                                                  
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  ↑/k   Move Up        ←/h   Left Panel       C-d/u Page Dn/Up       H/M/L Move Cursor              
+  Supports Git & Hg                                                                                 
+  ↓/j   Move Down      →/l   Right Panel      zz/zt Scroll View      e/x   Edit / Undo      --vcs   
+  git/hg                                                                                            
+                                                                                                    

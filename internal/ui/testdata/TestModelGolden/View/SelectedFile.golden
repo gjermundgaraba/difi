@@ -1,0 +1,28 @@
+  repo-with-a-very-long-name:git  feature ➜ HEAD +3 -1                       src/app/main.go  +3 -1 
+╭────────────────╮                                                                                  
+│ ▾  docs       │   1    func main() {                                                             
+│   ▾  sub      │   2   -    println("old")                                                        
+│        api.go │   3   +    println("new")                                                        
+│      guide.md │   4   +    println("more")                                                       
+│ ▾  src        │   5    }                                                                         
+│   ▾  app      │   6                                                                              
+│        main.… │                                                                                  
+│ ▾  very       │                                                                                  
+│   ▾  long     │                                                                                  
+│     ▾  path   │                                                                                  
+│       ▾  to   │                                                                                  
+│         ▾  t… │                                                                                  
+│           ▾ … │                                                                                  
+│              … │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+╰────────────────╯                                                                                  
+ ? Help  x Undo Hunk  q Quit  Tab Switch                                                            

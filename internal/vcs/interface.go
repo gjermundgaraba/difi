@@ -15,5 +15,19 @@ type VCS interface {
 	ExtractFileDiff(diffText, targetPath string) string
 }
 
-type DiffMsg struct{ Content string }
-type EditorFinishedMsg struct{ Err error }
+type ChangeUndoer interface {
+	UndoSelectedChangeCmd(targetBranch, path, rawDiff string, cursorLine int) tea.Cmd
+}
+
+type DiffMsg struct {
+	Content    string
+	RawContent string
+}
+type (
+	EditorFinishedMsg struct{ Err error }
+	UndoResultMsg     struct {
+		Err     error
+		Changed bool
+		Message string
+	}
+)

@@ -92,8 +92,11 @@ git diff | difi
 | `j / k`       | Move cursor down / up                        |
 | `h / l`       | Focus Left (Tree) / Focus Right (Diff)       |
 | `e` / `Enter` | Edit file (opens editor at selected line)    |
+| `x`           | Undo the current Git hunk in Diff View       |
 | `?`           | Toggle help drawer                           |
 | `q`           | Quit                                         |
+
+`x` is currently available only for live Git diffs against `HEAD`. Piped diffs, Mercurial, and non-`HEAD` targets remain read-only.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -157,7 +160,14 @@ git difi
 ```bash
 git clone https://github.com/oug-t/difi
 cd difi
+go test ./...
 go run cmd/difi/main.go
+```
+
+To refresh golden files after intentional UI rendering changes:
+
+```bash
+go test ./... -update
 ```
 
 Contributions are especially welcome in:

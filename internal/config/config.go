@@ -25,11 +25,18 @@ func Load() Config {
 		},
 	}
 
-	home, _ := os.UserHomeDir()
-	configPath := filepath.Join(home, ".config", "difi", "config.yaml")
+	configPath := os.Getenv("DIFI_CONFIG")
+	if configPath == "" {
+		if configDir, err := os.UserConfigDir(); err == nil {
+			configPath = filepath.Join(configDir, "difi", "config.yaml")
+		}
+	}
 
-	if data, err := os.ReadFile(configPath); err == nil {
-		_ = yaml.Unmarshal(data, &cfg)
+	if configPath != "" {
+		//nolint:gosec // User-controlled config path is intentional.
+		if data, err := os.ReadFile(configPath); err == nil {
+			_ = yaml.Unmarshal(data, &cfg)
+		}
 	}
 
 	if cfg.Editor == "" {

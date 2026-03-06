@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
 	"github.com/oug-t/difi/internal/config"
 	"github.com/oug-t/difi/internal/tree"
 )
@@ -31,6 +32,7 @@ func (d TreeDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 				return nil
 			}
 
+			//nolint:gosec // The editor command is intentionally user-configurable.
 			c := exec.Command(d.Config.Editor, i.Title())
 			return tea.ExecProcess(c, func(err error) tea.Msg {
 				return nil

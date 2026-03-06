@@ -17,7 +17,7 @@ var (
 			BorderForeground(nord3). // Goal 1: Nord3 Separator
 			Padding(0, 1)
 
-	FocusedPaneStyle = PaneStyle.Copy().
+	FocusedPaneStyle = PaneStyle.
 				BorderForeground(nord9)
 
 	// -- TOP BAR STYLES (Goal 2) --

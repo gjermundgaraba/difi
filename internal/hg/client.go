@@ -11,9 +11,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-var hgRoot string
-var ansiRe = regexp.MustCompile("[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))")
-var hunkHeaderRe = regexp.MustCompile(`^.*?@@ \-\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@`)
+var (
+	hgRoot       string
+	ansiRe       = regexp.MustCompile("[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))")
+	hunkHeaderRe = regexp.MustCompile(`^.*?@@ \-\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@`)
+)
+
+const tipRev = "tip"
 
 func getHgRoot() string {
 	if hgRoot != "" {
@@ -60,7 +64,7 @@ func GetRepoName() string {
 
 func ListChangedFiles(targetBranch string) ([]string, error) {
 	var cmd *exec.Cmd
-	if targetBranch == "tip" || targetBranch == "." || targetBranch == "" {
+	if targetBranch == tipRev || targetBranch == "." || targetBranch == "" {
 		cmd = hgCmd("status", "--no-status")
 	} else {
 		cmd = hgCmd("status", "--rev", targetBranch, "--no-status")
@@ -80,7 +84,7 @@ func ListChangedFiles(targetBranch string) ([]string, error) {
 func DiffCmd(targetBranch, path string) tea.Cmd {
 	return func() tea.Msg {
 		var cmd *exec.Cmd
-		if targetBranch == "tip" || targetBranch == "." || targetBranch == "" {
+		if targetBranch == tipRev || targetBranch == "." || targetBranch == "" {
 			cmd = hgCmd("diff", "--color=always", path)
 		} else {
 			cmd = hgCmd("diff", "--color=always", "--rev", targetBranch, path)
@@ -88,9 +92,10 @@ func DiffCmd(targetBranch, path string) tea.Cmd {
 
 		out, err := cmd.Output()
 		if err != nil {
-			return DiffMsg{Content: "Error fetching diff: " + err.Error()}
+			msg := "Error fetching diff: " + err.Error()
+			return DiffMsg{Content: msg, RawContent: msg}
 		}
-		return DiffMsg{Content: string(out)}
+		return DiffMsg{Content: string(out), RawContent: stripAnsi(string(out))}
 	}
 }
 
@@ -116,7 +121,7 @@ func OpenEditorCmd(path string, lineNumber int, targetBranch string, editor stri
 
 func DiffStats(targetBranch string) (added int, deleted int, err error) {
 	var cmd *exec.Cmd
-	if targetBranch == "tip" || targetBranch == "." || targetBranch == "" {
+	if targetBranch == tipRev || targetBranch == "." || targetBranch == "" {
 		cmd = hgCmd("diff", "--stat")
 	} else {
 		cmd = hgCmd("diff", "--rev", targetBranch, "--stat")
@@ -151,7 +156,7 @@ func DiffStats(targetBranch string) (added int, deleted int, err error) {
 
 func DiffStatsByFile(targetBranch string) (map[string][2]int, error) {
 	var cmd *exec.Cmd
-	if targetBranch == "tip" || targetBranch == "." || targetBranch == "" {
+	if targetBranch == tipRev || targetBranch == "." || targetBranch == "" {
 		cmd = hgCmd("diff", "--stat")
 	} else {
 		cmd = hgCmd("diff", "--rev", targetBranch, "--stat")
@@ -176,9 +181,10 @@ func DiffStatsByFile(targetBranch string) (map[string][2]int, error) {
 		changesPart := strings.TrimSpace(line[pipeIdx+1:])
 		var a, d int
 		for _, ch := range changesPart {
-			if ch == '+' {
+			switch ch {
+			case '+':
 				a++
-			} else if ch == '-' {
+			case '-':
 				d++
 			}
 		}
@@ -235,7 +241,10 @@ func stripAnsi(str string) string {
 	return ansiRe.ReplaceAllString(str, "")
 }
 
-type DiffMsg struct{ Content string }
+type DiffMsg struct {
+	Content    string
+	RawContent string
+}
 type EditorFinishedMsg struct{ Err error }
 
 func ParseFilesFromDiff(diffText string) []string {

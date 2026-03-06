@@ -1,0 +1,115 @@
+package main
+
+import (
+	"bytes"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestRunVersion(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	exitCode := run([]string{"--version"}, nil, &stdout, &stderr)
+
+	require.Zero(t, exitCode)
+	require.Equal(t, "difi version "+version+"\n", stdout.String())
+	require.Empty(t, stderr.String())
+}
+
+func TestRunRejectsInvalidVCS(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	exitCode := run([]string{"--vcs", "svn"}, nil, &stdout, &stderr)
+
+	require.Equal(t, 1, exitCode)
+	require.Empty(t, stdout.String())
+	require.Contains(t, stderr.String(), "unsupported VCS 'svn'")
+}
+
+func TestReadPipedDiff(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "stdin.diff")
+	want := "diff --git a/a.txt b/a.txt\n+hello\n"
+	require.NoError(t, os.WriteFile(path, []byte(want), 0o644))
+
+	file, err := os.Open(path)
+	require.NoError(t, err)
+	defer file.Close()
+
+	require.Equal(t, want, readPipedDiff(file))
+}
+
+func TestRunPlainForcedGitListsChangedFiles(t *testing.T) {
+	withTempRepo(t, func() {
+		writeNotesFile(t, "one\n")
+		runGit(t, "add", "notes.txt")
+		runGit(t, "commit", "-q", "-m", "init")
+
+		writeNotesFile(t, "one\ntwo\n")
+
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		exitCode := run([]string{"--vcs", "git", "--plain"}, nil, &stdout, &stderr)
+
+		require.Zero(t, exitCode, "stderr = %q", stderr.String())
+		require.Equal(t, "notes.txt\n", stdout.String())
+		require.Empty(t, stderr.String())
+	})
+}
+
+func TestRunPlainUsesPositionalTarget(t *testing.T) {
+	withTempRepo(t, func() {
+		writeNotesFile(t, "one\n")
+		runGit(t, "add", "notes.txt")
+		runGit(t, "commit", "-q", "-m", "init")
+
+		writeNotesFile(t, "one\ntwo\n")
+		runGit(t, "add", "notes.txt")
+		runGit(t, "commit", "-q", "-m", "second")
+
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		exitCode := run([]string{"--vcs", "git", "--plain", "HEAD~1"}, nil, &stdout, &stderr)
+
+		require.Zero(t, exitCode, "stderr = %q", stderr.String())
+		require.Equal(t, "notes.txt\n", stdout.String())
+	})
+}
+
+func withTempRepo(t *testing.T, fn func()) {
+	t.Helper()
+
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	runGit(t, "init", "-q")
+	runGit(t, "config", "user.email", "test@example.com")
+	runGit(t, "config", "user.name", "Test User")
+
+	fn()
+}
+
+func runGit(t *testing.T, args ...string) {
+	t.Helper()
+
+	cmd := exec.Command("git", append([]string{"--no-pager"}, args...)...)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	out, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "git %s failed\n%s", strings.Join(args, " "), out)
+}
+
+func writeNotesFile(t *testing.T, content string) {
+	t.Helper()
+
+	path := "notes.txt"
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		require.NoError(t, err)
+	}
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+}

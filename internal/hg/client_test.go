@@ -3,6 +3,8 @@ package hg
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestStripAnsi(t *testing.T) {
@@ -35,10 +37,7 @@ func TestStripAnsi(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := stripAnsi(tt.input)
-			if result != tt.expected {
-				t.Errorf("stripAnsi(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			require.Equal(t, tt.expected, stripAnsi(tt.input))
 		})
 	}
 }
@@ -56,9 +55,9 @@ func TestCalculateFileLine(t *testing.T) {
  `
 
 	tests := []struct {
-		name              string
-		visualLineIndex   int
-		expectedLineNo    int
+		name            string
+		visualLineIndex int
+		expectedLineNo  int
 	}{
 		{
 			name:            "header line",
@@ -94,10 +93,7 @@ func TestCalculateFileLine(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := CalculateFileLine(diffContent, tt.visualLineIndex)
-			if result != tt.expectedLineNo {
-				t.Errorf("CalculateFileLine(%d) = %d, want %d", tt.visualLineIndex, result, tt.expectedLineNo)
-			}
+			require.Equal(t, tt.expectedLineNo, CalculateFileLine(diffContent, tt.visualLineIndex))
 		})
 	}
 }
@@ -122,23 +118,11 @@ diff -r 123456 file2.py
 	expected := []string{"file1.go", "file2.py"}
 	result := ParseFilesFromDiff(diffText)
 
-	if len(result) != len(expected) {
-		t.Errorf("ParseFilesFromDiff() returned %d files, want %d", len(result), len(expected))
-		return
-	}
-
-	for i, file := range expected {
-		if result[i] != file {
-			t.Errorf("ParseFilesFromDiff() file %d = %q, want %q", i, result[i], file)
-		}
-	}
+	require.Equal(t, expected, result)
 }
 
 func TestParseFilesFromDiffEmpty(t *testing.T) {
-	result := ParseFilesFromDiff("")
-	if len(result) != 0 {
-		t.Errorf("ParseFilesFromDiff('') = %v, want empty slice", result)
-	}
+	require.Empty(t, ParseFilesFromDiff(""))
 }
 
 func TestParseFilesFromDiffNoDuplicates(t *testing.T) {
@@ -155,12 +139,7 @@ diff -r 123456 file1.go
 `
 
 	result := ParseFilesFromDiff(diffText)
-	if len(result) != 1 {
-		t.Errorf("ParseFilesFromDiff() returned %d files, want 1 (no duplicates)", len(result))
-	}
-	if len(result) > 0 && result[0] != "file1.go" {
-		t.Errorf("ParseFilesFromDiff() file = %q, want %q", result[0], "file1.go")
-	}
+	require.Equal(t, []string{"file1.go"}, result)
 }
 
 func TestExtractFileDiff(t *testing.T) {
@@ -193,9 +172,7 @@ diff -r 123456 file2.py
 	result = strings.TrimSpace(result)
 	expectedFile1 = strings.TrimSpace(expectedFile1)
 
-	if result != expectedFile1 {
-		t.Errorf("ExtractFileDiff() for file1.go:\nGot:\n%s\nWant:\n%s", result, expectedFile1)
-	}
+	require.Equal(t, expectedFile1, result)
 }
 
 func TestExtractFileDiffNotFound(t *testing.T) {
@@ -206,8 +183,5 @@ func TestExtractFileDiffNotFound(t *testing.T) {
  package main
 `
 
-	result := ExtractFileDiff(diffText, "nonexistent.go")
-	if strings.TrimSpace(result) != "" {
-		t.Errorf("ExtractFileDiff() for nonexistent file = %q, want empty", result)
-	}
+	require.Empty(t, strings.TrimSpace(ExtractFileDiff(diffText, "nonexistent.go")))
 }

@@ -1,0 +1,28 @@
+  repo-with-a-very-long-name:git  feature ➜ HEAD +4 -2                                 docs/  +4 -2 
+╭────────────────╮                                                                                  
+│ ▾  docs       │                                                                                  
+│   ▾  sub      │                                                                                  
+│        api.go │                                      difi                                        
+│      guide.md │                                                                                  
+│ ▾  src        │              A calm, focused way to review Git & Mercurial diffs.                
+│   ▾  app      │                                                                                  
+│        main.… │                                 Directory: docs                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │     Usage Patterns                                    Navigation                 
+│                │                                                                                  
+│                │     difi    Auto-detect VCS, diff against main/tip    Tab    Switch panels       
+│                │     difi --vcs git    Force Git mode                  j/k    Move cursor         
+│                │     difi --vcs hg    Force Mercurial mode                                        
+│                │                                                                                  
+│                │     Neovim Integration                                                           
+│                │                                                                                  
+│                │     oug-t/difi.nvim  Install plugin                                              
+│                │     Press 'e'          Edit with context                                         
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+│                │                                                                                  
+╰────────────────╯                                                                                  
+ ? Help  x Undo Hunk  q Quit  Tab Switch                                                            

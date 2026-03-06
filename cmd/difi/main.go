@@ -7,6 +7,7 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/oug-t/difi/internal/config"
 	"github.com/oug-t/difi/internal/ui"
 	"github.com/oug-t/difi/internal/vcs"
@@ -15,23 +16,28 @@ import (
 var version = "dev"
 
 func main() {
-	showVersion := flag.Bool("version", false, "Show version")
-	plain := flag.Bool("plain", false, "Print a plain summary")
-	forceVCS := flag.String("vcs", "", "Force specific VCS (git or hg)")
-	flag.Parse()
+	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+}
+
+func run(args []string, stdin *os.File, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("difi", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+
+	showVersion := flags.Bool("version", false, "Show version")
+	plain := flags.Bool("plain", false, "Print a plain summary")
+	forceVCS := flags.String("vcs", "", "Force specific VCS (git or hg)")
+
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
 
 	if *showVersion {
-		fmt.Printf("difi version %s\n", version)
-		os.Exit(0)
+		fmt.Fprintf(stdout, "difi version %s\n", version)
+		return 0
 	}
 
-	var pipedDiff string
-	if stat, _ := os.Stdin.Stat(); (stat.Mode() & os.ModeCharDevice) == 0 {
-		b, _ := io.ReadAll(os.Stdin)
-		pipedDiff = string(b)
-	}
+	pipedDiff := readPipedDiff(stdin)
 
-	// Detect or force VCS type
 	var vcsClient vcs.VCS
 	if *forceVCS != "" {
 		switch *forceVCS {
@@ -40,34 +46,32 @@ func main() {
 		case "hg":
 			vcsClient = vcs.HgVCS{}
 		default:
-			fmt.Fprintf(os.Stderr, "Error: unsupported VCS '%s'. Supported values: git, hg\n", *forceVCS)
-			os.Exit(1)
+			fmt.Fprintf(stderr, "Error: unsupported VCS '%s'. Supported values: git, hg\n", *forceVCS)
+			return 1
 		}
 	} else {
 		vcsClient = vcs.DetectVCS()
 	}
 
 	target := "HEAD"
-	if flag.NArg() > 0 {
-		target = flag.Arg(0)
+	if flags.NArg() > 0 {
+		target = flags.Arg(0)
 	}
 
-	// For Mercurial, use "tip" as default instead of "HEAD"
 	if _, isHg := vcsClient.(vcs.HgVCS); isHg && target == "HEAD" {
 		target = "tip"
 	}
 
 	if *plain && pipedDiff == "" {
-		// Use VCS-specific commands for plain output
 		files, err := vcsClient.ListChangedFiles(target)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error listing changed files: %v\n", err)
-			os.Exit(1)
+			fmt.Fprintf(stderr, "Error listing changed files: %v\n", err)
+			return 1
 		}
 		for _, file := range files {
-			fmt.Println(file)
+			fmt.Fprintln(stdout, file)
 		}
-		os.Exit(0)
+		return 0
 	}
 
 	cfg := config.Load()
@@ -75,13 +79,34 @@ func main() {
 	opts := []tea.ProgramOption{tea.WithAltScreen()}
 	if pipedDiff != "" {
 		if tty, err := os.Open("/dev/tty"); err == nil {
+			defer tty.Close()
 			opts = append(opts, tea.WithInput(tty))
 		}
 	}
 
 	p := tea.NewProgram(ui.NewModel(cfg, target, pipedDiff, vcsClient), opts...)
 	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
 	}
+
+	return 0
+}
+
+func readPipedDiff(stdin *os.File) string {
+	if stdin == nil {
+		return ""
+	}
+
+	stat, err := stdin.Stat()
+	if err != nil || (stat.Mode()&os.ModeCharDevice) != 0 {
+		return ""
+	}
+
+	b, err := io.ReadAll(stdin)
+	if err != nil {
+		return ""
+	}
+
+	return string(b)
 }

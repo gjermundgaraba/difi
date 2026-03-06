@@ -5,28 +5,33 @@ import (
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/oug-t/difi/internal/git"
 	"github.com/oug-t/difi/internal/hg"
 )
 
-type GitVCS struct{}
-type HgVCS struct{}
+type (
+	GitVCS struct{}
+	HgVCS  struct{}
+)
 
 func (g GitVCS) GetCurrentBranch() string { return git.GetCurrentBranch() }
 func (g GitVCS) GetRepoName() string      { return git.GetRepoName() }
 func (g GitVCS) ListChangedFiles(targetBranch string) ([]string, error) {
 	return git.ListChangedFiles(targetBranch)
 }
+
 func (g GitVCS) DiffCmd(targetBranch, path string) tea.Cmd {
 	gitCmd := git.DiffCmd(targetBranch, path)
 	return func() tea.Msg {
 		msg := gitCmd()
 		if gitMsg, ok := msg.(git.DiffMsg); ok {
-			return DiffMsg{Content: gitMsg.Content}
+			return DiffMsg{Content: gitMsg.Content, RawContent: gitMsg.RawContent}
 		}
 		return msg
 	}
 }
+
 func (g GitVCS) OpenEditorCmd(path string, lineNumber int, targetBranch string, editor string) tea.Cmd {
 	gitCmd := git.OpenEditorCmd(path, lineNumber, targetBranch, editor)
 	return func() tea.Msg {
@@ -37,12 +42,15 @@ func (g GitVCS) OpenEditorCmd(path string, lineNumber int, targetBranch string, 
 		return msg
 	}
 }
+
 func (g GitVCS) DiffStats(targetBranch string) (added int, deleted int, err error) {
 	return git.DiffStats(targetBranch)
 }
+
 func (g GitVCS) DiffStatsByFile(targetBranch string) (map[string][2]int, error) {
 	return git.DiffStatsByFile(targetBranch)
 }
+
 func (g GitVCS) CalculateFileLine(diffContent string, visualLineIndex int) int {
 	return git.CalculateFileLine(diffContent, visualLineIndex)
 }
@@ -51,21 +59,34 @@ func (g GitVCS) ExtractFileDiff(diffText, targetPath string) string {
 	return git.ExtractFileDiff(diffText, targetPath)
 }
 
+func (g GitVCS) UndoSelectedChangeCmd(targetBranch, path, rawDiff string, cursorLine int) tea.Cmd {
+	gitCmd := git.UndoSelectedChangeCmd(targetBranch, path, rawDiff, cursorLine)
+	return func() tea.Msg {
+		msg := gitCmd()
+		if gitMsg, ok := msg.(git.UndoResultMsg); ok {
+			return UndoResultMsg{Err: gitMsg.Err, Changed: gitMsg.Changed, Message: gitMsg.Message}
+		}
+		return msg
+	}
+}
+
 func (h HgVCS) GetCurrentBranch() string { return hg.GetCurrentBranch() }
 func (h HgVCS) GetRepoName() string      { return hg.GetRepoName() }
 func (h HgVCS) ListChangedFiles(targetBranch string) ([]string, error) {
 	return hg.ListChangedFiles(targetBranch)
 }
+
 func (h HgVCS) DiffCmd(targetBranch, path string) tea.Cmd {
 	hgCmd := hg.DiffCmd(targetBranch, path)
 	return func() tea.Msg {
 		msg := hgCmd()
 		if hgMsg, ok := msg.(hg.DiffMsg); ok {
-			return DiffMsg{Content: hgMsg.Content}
+			return DiffMsg{Content: hgMsg.Content, RawContent: hgMsg.RawContent}
 		}
 		return msg
 	}
 }
+
 func (h HgVCS) OpenEditorCmd(path string, lineNumber int, targetBranch string, editor string) tea.Cmd {
 	hgCmd := hg.OpenEditorCmd(path, lineNumber, targetBranch, editor)
 	return func() tea.Msg {
@@ -76,12 +97,15 @@ func (h HgVCS) OpenEditorCmd(path string, lineNumber int, targetBranch string, e
 		return msg
 	}
 }
+
 func (h HgVCS) DiffStats(targetBranch string) (added int, deleted int, err error) {
 	return hg.DiffStats(targetBranch)
 }
+
 func (h HgVCS) DiffStatsByFile(targetBranch string) (map[string][2]int, error) {
 	return hg.DiffStatsByFile(targetBranch)
 }
+
 func (h HgVCS) CalculateFileLine(diffContent string, visualLineIndex int) int {
 	return hg.CalculateFileLine(diffContent, visualLineIndex)
 }
