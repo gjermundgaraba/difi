@@ -82,6 +82,34 @@ func TestRunPlainUsesPositionalTarget(t *testing.T) {
 	})
 }
 
+func TestRunPlainForcedJjListsChangedFiles(t *testing.T) {
+	withTempJjRepo(t, func() {
+		writeNotesFile(t, "one\n")
+
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		exitCode := run([]string{"--vcs", "jj", "--plain"}, nil, &stdout, &stderr)
+
+		require.Zero(t, exitCode, "stderr = %q", stderr.String())
+		require.Equal(t, "notes.txt\n", stdout.String())
+		require.Empty(t, stderr.String())
+	})
+}
+
+func TestRunPlainAutoDetectsJjRepo(t *testing.T) {
+	withTempJjRepo(t, func() {
+		writeNotesFile(t, "one\n")
+
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		exitCode := run([]string{"--plain"}, nil, &stdout, &stderr)
+
+		require.Zero(t, exitCode, "stderr = %q", stderr.String())
+		require.Equal(t, "notes.txt\n", stdout.String())
+		require.Empty(t, stderr.String())
+	})
+}
+
 func withTempRepo(t *testing.T, fn func()) {
 	t.Helper()
 
@@ -92,6 +120,24 @@ func withTempRepo(t *testing.T, fn func()) {
 	runGit(t, "config", "user.email", "test@example.com")
 	runGit(t, "config", "user.name", "Test User")
 
+	fn()
+}
+
+func withTempJjRepo(t *testing.T, fn func()) {
+	t.Helper()
+
+	if _, err := exec.LookPath("jj"); err != nil {
+		t.Skip("jj binary not available")
+	}
+
+	base := t.TempDir()
+	cmd := exec.Command("jj", "git", "init", "repo")
+	cmd.Dir = base
+	out, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "jj git init failed\n%s", out)
+
+	repo := filepath.Join(base, "repo")
+	t.Chdir(repo)
 	fn()
 }
 

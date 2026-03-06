@@ -9,70 +9,68 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oug-t/difi/internal/config"
+	diffparse "github.com/oug-t/difi/internal/diff"
 	"github.com/oug-t/difi/internal/vcs"
 )
 
-const testPathA = "a.go"
+const (
+	testPathA = "a.go"
+)
 
 type fakeVCS struct {
-	files             []string
-	diffByPath        map[string]string
-	extractDiffByPath map[string]string
-	parseFiles        []string
-	currentRepo       string
-	listErr           error
-	statsAdded        int
-	statsDeleted      int
-	statsByFile       map[string][2]int
+	files        []string
+	diffByPath   map[string]string
+	currentRepo  string
+	kind         string
+	listErr      error
+	statsAdded   int
+	statsDeleted int
+	statsByFile  map[string][2]int
 }
 
-func (f *fakeVCS) GetCurrentBranch() string { return "feature" }
-func (f *fakeVCS) GetRepoName() string {
+func (f *fakeVCS) Kind() string {
+	if f.kind != "" {
+		return f.kind
+	}
+	return "git"
+}
+func (f *fakeVCS) CurrentLabel() string { return "feature" }
+func (f *fakeVCS) RepoName() string {
 	if f.currentRepo != "" {
 		return f.currentRepo
 	}
 	return "repo"
 }
+func (f *fakeVCS) DefaultTarget() string { return "HEAD" }
 
-func (f *fakeVCS) ListChangedFiles(targetBranch string) ([]string, error) {
+func (f *fakeVCS) ListChangedFiles(target string) ([]string, error) {
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
 	return append([]string{}, f.files...), nil
 }
 
-func (f *fakeVCS) DiffCmd(targetBranch, path string) tea.Cmd {
+func (f *fakeVCS) DiffCmd(target, path string) tea.Cmd {
 	diff := f.diffByPath[path]
 	return func() tea.Msg {
 		return vcs.DiffMsg{Content: diff, RawContent: diff}
 	}
 }
 
-func (f *fakeVCS) OpenEditorCmd(path string, lineNumber int, targetBranch string, editor string) tea.Cmd {
+func (f *fakeVCS) OpenEditorCmd(path string, lineNumber int, target string, editor string) tea.Cmd {
 	return nil
 }
 
-func (f *fakeVCS) DiffStats(targetBranch string) (int, int, error) {
+func (f *fakeVCS) DiffStats(target string) (int, int, error) {
 	return f.statsAdded, f.statsDeleted, nil
 }
 
-func (f *fakeVCS) DiffStatsByFile(targetBranch string) (map[string][2]int, error) {
+func (f *fakeVCS) DiffStatsByFile(target string) (map[string][2]int, error) {
 	result := make(map[string][2]int, len(f.statsByFile))
 	for path, stats := range f.statsByFile {
 		result[path] = stats
 	}
 	return result, nil
-}
-func (f *fakeVCS) CalculateFileLine(diffContent string, visualLineIndex int) int { return 1 }
-func (f *fakeVCS) ParseFilesFromDiff(diffText string) []string {
-	return append([]string{}, f.parseFiles...)
-}
-
-func (f *fakeVCS) ExtractFileDiff(diffText, targetPath string) string {
-	if diff, ok := f.extractDiffByPath[targetPath]; ok {
-		return diff
-	}
-	return diffText
 }
 
 type fakeUndoVCS struct {
@@ -85,9 +83,9 @@ type fakeUndoVCS struct {
 	result     vcs.UndoResultMsg
 }
 
-func (f *fakeUndoVCS) UndoSelectedChangeCmd(targetBranch, path, rawDiff string, cursorLine int) tea.Cmd {
+func (f *fakeUndoVCS) UndoSelectedChangeCmd(target, path, rawDiff string, cursorLine int) tea.Cmd {
 	f.called = true
-	f.lastTarget = targetBranch
+	f.lastTarget = target
 	f.lastPath = path
 	f.lastDiff = rawDiff
 	f.lastCursor = cursorLine
@@ -229,7 +227,7 @@ func TestDiffMsgUsesProvidedRawContent(t *testing.T) {
 		"",
 	}, "\n")
 
-	rawDiff := stripAnsi(coloredDiff)
+	rawDiff := diffparse.StripANSI(coloredDiff)
 	updatedModel, _ := model.Update(vcs.DiffMsg{Content: coloredDiff, RawContent: rawDiff})
 	updated := requireModel(t, updatedModel)
 	require.Equal(t, rawDiff, updated.rawDiffContent)
@@ -265,6 +263,35 @@ func TestComputePipedStatsCmdCountsGitDiff(t *testing.T) {
 	require.Equal(t, [2]int{1, 1}, statsMsg.ByFile["b.go"])
 }
 
+func TestUndoKeyDispatchesToAnyBackendImplementingChangeUndoer(t *testing.T) {
+	base := &fakeVCS{
+		files:      []string{testPathA},
+		diffByPath: map[string]string{testPathA: "@@ -1 +1 @@\n-old\n+new\n"},
+		kind:       "jj",
+	}
+	fake := &fakeUndoVCS{
+		fakeVCS: base,
+		result:  vcs.UndoResultMsg{Changed: true, Message: "Hunk undone"},
+	}
+
+	model := NewModel(config.Config{}, "HEAD", "", fake)
+	model.focus = FocusDiff
+	model.rawDiffContent = base.diffByPath[testPathA]
+	model.rawDiffLines = []string{"@@ -1 +1 @@", "-old", "+new", ""}
+	model.diffLines = append([]string{}, model.rawDiffLines...)
+	model.diffCursor = 2
+
+	updatedModel, cmd := model.Update(keyMsg("x"))
+	updated := requireModel(t, updatedModel)
+	require.NotNil(t, cmd)
+	require.True(t, fake.called)
+	require.Equal(t, "HEAD", fake.lastTarget)
+	require.Equal(t, testPathA, fake.lastPath)
+	require.Equal(t, 2, fake.lastCursor)
+	require.Equal(t, base.diffByPath[testPathA], fake.lastDiff)
+	require.Empty(t, updated.statusMessage)
+}
+
 func TestApplyFileListClearsSelectionAndDiffWhenFilesDisappear(t *testing.T) {
 	fake := &fakeVCS{files: []string{testPathA}}
 	model := NewModel(config.Config{}, "HEAD", "", fake)
@@ -291,14 +318,20 @@ func TestApplyFileListClearsSelectionAndDiffWhenFilesDisappear(t *testing.T) {
 }
 
 func TestLoadSelectedDiffCmdUsesExtractedPipedDiff(t *testing.T) {
-	fake := &fakeVCS{
-		parseFiles: []string{"a.go", "b.go"},
-		extractDiffByPath: map[string]string{
-			"b.go": "@@ -2 +2 @@\n-old\n+new\n",
-		},
-	}
+	fake := &fakeVCS{}
 
-	model := NewModel(config.Config{}, "HEAD", "full diff", fake)
+	fullDiff := strings.Join([]string{
+		"diff --git a/a.go b/a.go",
+		"@@ -1 +1 @@",
+		"-old",
+		"+new",
+		"diff --git a/b.go b/b.go",
+		"@@ -2 +2 @@",
+		"-old",
+		"+new",
+		"",
+	}, "\n")
+	model := NewModel(config.Config{}, "HEAD", fullDiff, fake)
 	model.selectedPath = "b.go"
 
 	cmd := model.loadSelectedDiffCmd()
@@ -307,8 +340,8 @@ func TestLoadSelectedDiffCmdUsesExtractedPipedDiff(t *testing.T) {
 	msg := cmd()
 	diffMsg, ok := msg.(vcs.DiffMsg)
 	require.Truef(t, ok, "cmd() returned %T, want vcs.DiffMsg", msg)
-	require.Equal(t, fake.extractDiffByPath["b.go"], diffMsg.Content)
-	require.Equal(t, fake.extractDiffByPath["b.go"], diffMsg.RawContent)
+	require.Equal(t, "diff --git a/b.go b/b.go\n@@ -2 +2 @@\n-old\n+new", strings.TrimSpace(diffMsg.Content))
+	require.Equal(t, strings.TrimSpace(diffMsg.Content), strings.TrimSpace(diffMsg.RawContent))
 }
 
 func TestFileListMsgErrorSetsStatus(t *testing.T) {
@@ -421,11 +454,17 @@ func TestFocusKeysSwitchPanels(t *testing.T) {
 func TestUndoKeyRejectsPipedDiff(t *testing.T) {
 	fake := &fakeVCS{
 		files:      []string{testPathA},
-		parseFiles: []string{testPathA},
 		diffByPath: map[string]string{testPathA: "@@ -1 +1 @@\n-old\n+new\n"},
 	}
 
-	model := NewModel(config.Config{}, "HEAD", "full diff", fake)
+	diff := strings.Join([]string{
+		"diff --git a/a.go b/a.go",
+		"@@ -1 +1 @@",
+		"-old",
+		"+new",
+		"",
+	}, "\n")
+	model := NewModel(config.Config{}, "HEAD", diff, fake)
 	model.focus = FocusDiff
 	model.selectedPath = testPathA
 

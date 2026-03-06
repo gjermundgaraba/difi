@@ -1,28 +1,30 @@
 package vcs
 
 import (
-	"os"
-	"path/filepath"
-
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/oug-t/difi/internal/git"
-	"github.com/oug-t/difi/internal/hg"
+	"github.com/oug-t/difi/internal/jj"
 )
 
 type (
-	GitVCS struct{}
-	HgVCS  struct{}
+	GitBackend struct{}
+	JjBackend  struct{}
 )
 
-func (g GitVCS) GetCurrentBranch() string { return git.GetCurrentBranch() }
-func (g GitVCS) GetRepoName() string      { return git.GetRepoName() }
-func (g GitVCS) ListChangedFiles(targetBranch string) ([]string, error) {
-	return git.ListChangedFiles(targetBranch)
+func (g GitBackend) Kind() string         { return "git" }
+func (g GitBackend) CurrentLabel() string { return git.GetCurrentBranch() }
+func (g GitBackend) RepoName() string     { return git.GetRepoName() }
+func (g GitBackend) DefaultTarget() string {
+	return "HEAD"
 }
 
-func (g GitVCS) DiffCmd(targetBranch, path string) tea.Cmd {
-	gitCmd := git.DiffCmd(targetBranch, path)
+func (g GitBackend) ListChangedFiles(target string) ([]string, error) {
+	return git.ListChangedFiles(target)
+}
+
+func (g GitBackend) DiffCmd(target, path string) tea.Cmd {
+	gitCmd := git.DiffCmd(target, path)
 	return func() tea.Msg {
 		msg := gitCmd()
 		if gitMsg, ok := msg.(git.DiffMsg); ok {
@@ -32,8 +34,8 @@ func (g GitVCS) DiffCmd(targetBranch, path string) tea.Cmd {
 	}
 }
 
-func (g GitVCS) OpenEditorCmd(path string, lineNumber int, targetBranch string, editor string) tea.Cmd {
-	gitCmd := git.OpenEditorCmd(path, lineNumber, targetBranch, editor)
+func (g GitBackend) OpenEditorCmd(path string, lineNumber int, target string, editor string) tea.Cmd {
+	gitCmd := git.OpenEditorCmd(path, lineNumber, target, editor)
 	return func() tea.Msg {
 		msg := gitCmd()
 		if gitMsg, ok := msg.(git.EditorFinishedMsg); ok {
@@ -43,24 +45,16 @@ func (g GitVCS) OpenEditorCmd(path string, lineNumber int, targetBranch string, 
 	}
 }
 
-func (g GitVCS) DiffStats(targetBranch string) (added int, deleted int, err error) {
-	return git.DiffStats(targetBranch)
+func (g GitBackend) DiffStats(target string) (added int, deleted int, err error) {
+	return git.DiffStats(target)
 }
 
-func (g GitVCS) DiffStatsByFile(targetBranch string) (map[string][2]int, error) {
-	return git.DiffStatsByFile(targetBranch)
+func (g GitBackend) DiffStatsByFile(target string) (map[string][2]int, error) {
+	return git.DiffStatsByFile(target)
 }
 
-func (g GitVCS) CalculateFileLine(diffContent string, visualLineIndex int) int {
-	return git.CalculateFileLine(diffContent, visualLineIndex)
-}
-func (g GitVCS) ParseFilesFromDiff(diffText string) []string { return git.ParseFilesFromDiff(diffText) }
-func (g GitVCS) ExtractFileDiff(diffText, targetPath string) string {
-	return git.ExtractFileDiff(diffText, targetPath)
-}
-
-func (g GitVCS) UndoSelectedChangeCmd(targetBranch, path, rawDiff string, cursorLine int) tea.Cmd {
-	gitCmd := git.UndoSelectedChangeCmd(targetBranch, path, rawDiff, cursorLine)
+func (g GitBackend) UndoSelectedChangeCmd(target, path, rawDiff string, cursorLine int) tea.Cmd {
+	gitCmd := git.UndoSelectedChangeCmd(target, path, rawDiff, cursorLine)
 	return func() tea.Msg {
 		msg := gitCmd()
 		if gitMsg, ok := msg.(git.UndoResultMsg); ok {
@@ -70,79 +64,53 @@ func (g GitVCS) UndoSelectedChangeCmd(targetBranch, path, rawDiff string, cursor
 	}
 }
 
-func (h HgVCS) GetCurrentBranch() string { return hg.GetCurrentBranch() }
-func (h HgVCS) GetRepoName() string      { return hg.GetRepoName() }
-func (h HgVCS) ListChangedFiles(targetBranch string) ([]string, error) {
-	return hg.ListChangedFiles(targetBranch)
+func (j JjBackend) Kind() string         { return "jj" }
+func (j JjBackend) CurrentLabel() string { return "@" }
+func (j JjBackend) RepoName() string     { return jj.GetRepoName() }
+func (j JjBackend) DefaultTarget() string {
+	return "@"
 }
 
-func (h HgVCS) DiffCmd(targetBranch, path string) tea.Cmd {
-	hgCmd := hg.DiffCmd(targetBranch, path)
+func (j JjBackend) ListChangedFiles(target string) ([]string, error) {
+	return jj.ListChangedFiles(target)
+}
+
+func (j JjBackend) DiffCmd(target, path string) tea.Cmd {
+	jjCmd := jj.DiffCmd(target, path)
 	return func() tea.Msg {
-		msg := hgCmd()
-		if hgMsg, ok := msg.(hg.DiffMsg); ok {
-			return DiffMsg{Content: hgMsg.Content, RawContent: hgMsg.RawContent}
+		msg := jjCmd()
+		if jjMsg, ok := msg.(jj.DiffMsg); ok {
+			return DiffMsg{Content: jjMsg.Content, RawContent: jjMsg.RawContent}
 		}
 		return msg
 	}
 }
 
-func (h HgVCS) OpenEditorCmd(path string, lineNumber int, targetBranch string, editor string) tea.Cmd {
-	hgCmd := hg.OpenEditorCmd(path, lineNumber, targetBranch, editor)
+func (j JjBackend) OpenEditorCmd(path string, lineNumber int, target string, editor string) tea.Cmd {
+	jjCmd := jj.OpenEditorCmd(path, lineNumber, target, editor)
 	return func() tea.Msg {
-		msg := hgCmd()
-		if hgMsg, ok := msg.(hg.EditorFinishedMsg); ok {
-			return EditorFinishedMsg{Err: hgMsg.Err}
+		msg := jjCmd()
+		if jjMsg, ok := msg.(jj.EditorFinishedMsg); ok {
+			return EditorFinishedMsg{Err: jjMsg.Err}
 		}
 		return msg
 	}
 }
 
-func (h HgVCS) DiffStats(targetBranch string) (added int, deleted int, err error) {
-	return hg.DiffStats(targetBranch)
+func (j JjBackend) DiffStats(target string) (added int, deleted int, err error) {
+	return jj.DiffStats(target)
 }
 
-func (h HgVCS) DiffStatsByFile(targetBranch string) (map[string][2]int, error) {
-	return hg.DiffStatsByFile(targetBranch)
+func (j JjBackend) DiffStatsByFile(target string) (map[string][2]int, error) {
+	return jj.DiffStatsByFile(target)
 }
 
-func (h HgVCS) CalculateFileLine(diffContent string, visualLineIndex int) int {
-	return hg.CalculateFileLine(diffContent, visualLineIndex)
-}
-func (h HgVCS) ParseFilesFromDiff(diffText string) []string { return hg.ParseFilesFromDiff(diffText) }
-func (h HgVCS) ExtractFileDiff(diffText, targetPath string) string {
-	return hg.ExtractFileDiff(diffText, targetPath)
-}
-
-func DetectVCS() VCS {
-	dir, err := os.Getwd()
-	if err != nil {
-		return GitVCS{}
+func DetectBackend() Backend {
+	if jj.RepoRoot() != "" {
+		return JjBackend{}
 	}
-
-	checkDir := dir
-	for {
-		if _, err := os.Stat(filepath.Join(checkDir, ".git")); err == nil {
-			return GitVCS{}
-		}
-		parent := filepath.Dir(checkDir)
-		if parent == checkDir {
-			break
-		}
-		checkDir = parent
+	if git.RepoRoot() != "" {
+		return GitBackend{}
 	}
-
-	checkDir = dir
-	for {
-		if _, err := os.Stat(filepath.Join(checkDir, ".hg")); err == nil {
-			return HgVCS{}
-		}
-		parent := filepath.Dir(checkDir)
-		if parent == checkDir {
-			break
-		}
-		checkDir = parent
-	}
-
-	return GitVCS{}
+	return GitBackend{}
 }

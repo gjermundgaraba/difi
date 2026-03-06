@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/oug-t/difi/internal/config"
+	diffparse "github.com/oug-t/difi/internal/diff"
 	"github.com/oug-t/difi/internal/tree"
 	"github.com/oug-t/difi/internal/vcs"
 )
@@ -24,9 +24,6 @@ const (
 	FocusTree Focus = iota
 	FocusDiff
 )
-
-// ansiRe matches ANSI escape sequences for stripping from terminal output.
-var ansiRe = regexp.MustCompile("[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))")
 
 type StatsMsg struct {
 	Added   int
@@ -45,10 +42,10 @@ type Model struct {
 	treeDelegate TreeDelegate
 	diffViewport viewport.Model
 
-	selectedPath  string
-	currentBranch string
-	targetBranch  string
-	repoName      string
+	selectedPath string
+	currentLabel string
+	reviewTarget string
+	repoName     string
 
 	statsAdded   int
 	statsDeleted int
@@ -74,17 +71,17 @@ type Model struct {
 	width, height int
 
 	pipedDiff string
-	vcs       vcs.VCS
+	backend   vcs.Backend
 }
 
-func NewModel(cfg config.Config, targetBranch string, pipedDiff string, vcsClient vcs.VCS) Model {
+func NewModel(cfg config.Config, target string, pipedDiff string, backend vcs.Backend) Model {
 	InitStyles(cfg)
 
 	var files []string
 	if pipedDiff != "" {
-		files = vcsClient.ParseFilesFromDiff(pipedDiff)
+		files = diffparse.ParseFiles(pipedDiff)
 	} else {
-		files, _ = vcsClient.ListChangedFiles(targetBranch)
+		files, _ = backend.ListChangedFiles(target)
 	}
 	t := tree.New(files)
 	items := t.Items()
@@ -104,19 +101,19 @@ func NewModel(cfg config.Config, targetBranch string, pipedDiff string, vcsClien
 	l.DisableQuitKeybindings()
 
 	m := Model{
-		fileList:      l,
-		treeState:     t,
-		treeDelegate:  delegate,
-		diffViewport:  viewport.New(0, 0),
-		focus:         FocusTree,
-		currentBranch: vcsClient.GetCurrentBranch(),
-		targetBranch:  targetBranch,
-		repoName:      vcsClient.GetRepoName(),
-		showHelp:      false,
-		inputBuffer:   "",
-		pendingZ:      false,
-		pipedDiff:     pipedDiff,
-		vcs:           vcsClient,
+		fileList:     l,
+		treeState:    t,
+		treeDelegate: delegate,
+		diffViewport: viewport.New(0, 0),
+		focus:        FocusTree,
+		currentLabel: backend.CurrentLabel(),
+		reviewTarget: target,
+		repoName:     backend.RepoName(),
+		showHelp:     false,
+		inputBuffer:  "",
+		pendingZ:     false,
+		pipedDiff:    pipedDiff,
+		backend:      backend,
 	}
 
 	// Find the first file (not directory) to select initially
@@ -140,7 +137,7 @@ func (m Model) Init() tea.Cmd {
 	}
 
 	if m.pipedDiff == "" {
-		cmds = append(cmds, m.fetchStatsCmd(m.targetBranch))
+		cmds = append(cmds, m.fetchStatsCmd(m.reviewTarget))
 	} else {
 		cmds = append(cmds, m.computePipedStatsCmd())
 	}
@@ -150,57 +147,25 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) fetchStatsCmd(target string) tea.Cmd {
 	return func() tea.Msg {
-		added, deleted, err := m.vcs.DiffStats(target)
+		added, deleted, err := m.backend.DiffStats(target)
 		if err != nil {
 			return nil
 		}
-		byFile, _ := m.vcs.DiffStatsByFile(target)
+		byFile, _ := m.backend.DiffStatsByFile(target)
 		return StatsMsg{Added: added, Deleted: deleted, ByFile: byFile}
 	}
 }
 
 func (m Model) computePipedStatsCmd() tea.Cmd {
 	return func() tea.Msg {
-		byFile := make(map[string][2]int)
-		var totalAdded, totalDeleted int
-		var currentFile string
-
-		for _, line := range strings.Split(m.pipedDiff, "\n") {
-			clean := stripAnsi(line)
-			if strings.HasPrefix(clean, "diff --git ") {
-				// git format: "diff --git a/path b/path"
-				parts := strings.Fields(clean)
-				if len(parts) >= 4 {
-					currentFile = strings.TrimPrefix(parts[3], "b/")
-				}
-			} else if strings.HasPrefix(clean, "diff -r ") {
-				// hg format: "diff -r <rev> <file>" or "diff -r <rev1> -r <rev2> <file>"
-				// The file path is always the last whitespace-separated field.
-				parts := strings.Fields(clean)
-				if len(parts) >= 3 {
-					currentFile = parts[len(parts)-1]
-				}
-			} else if currentFile != "" {
-				if strings.HasPrefix(clean, "+") && !strings.HasPrefix(clean, "+++") {
-					s := byFile[currentFile]
-					s[0]++
-					byFile[currentFile] = s
-					totalAdded++
-				} else if strings.HasPrefix(clean, "-") && !strings.HasPrefix(clean, "---") {
-					s := byFile[currentFile]
-					s[1]++
-					byFile[currentFile] = s
-					totalDeleted++
-				}
-			}
-		}
-		return StatsMsg{Added: totalAdded, Deleted: totalDeleted, ByFile: byFile}
+		added, deleted, byFile := diffparse.Stats(m.pipedDiff)
+		return StatsMsg{Added: added, Deleted: deleted, ByFile: byFile}
 	}
 }
 
 func (m Model) listChangedFilesCmd(target string) tea.Cmd {
 	return func() tea.Msg {
-		files, err := m.vcs.ListChangedFiles(target)
+		files, err := m.backend.ListChangedFiles(target)
 		return FileListMsg{Files: files, Err: err}
 	}
 }
@@ -211,11 +176,11 @@ func (m Model) loadSelectedDiffCmd() tea.Cmd {
 	}
 	if m.pipedDiff != "" {
 		return func() tea.Msg {
-			diff := m.vcs.ExtractFileDiff(m.pipedDiff, m.selectedPath)
+			diff := diffparse.ExtractFile(m.pipedDiff, m.selectedPath)
 			return vcs.DiffMsg{Content: diff, RawContent: diff}
 		}
 	}
-	return m.vcs.DiffCmd(m.targetBranch, m.selectedPath)
+	return m.backend.DiffCmd(m.reviewTarget, m.selectedPath)
 }
 
 func (m *Model) setStatus(msg string) {
@@ -338,7 +303,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			if m.selectedPath != "" {
-				return m, m.vcs.OpenEditorCmd(m.selectedPath, m.editorLineNumber(), m.targetBranch, m.treeDelegate.Config.Editor)
+				return m, m.backend.OpenEditorCmd(m.selectedPath, m.editorLineNumber(), m.reviewTarget, m.treeDelegate.Config.Editor)
 			}
 
 		case "e":
@@ -348,7 +313,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				m.inputBuffer = ""
-				return m, m.vcs.OpenEditorCmd(m.selectedPath, m.editorLineNumber(), m.targetBranch, m.treeDelegate.Config.Editor)
+				return m, m.backend.OpenEditorCmd(m.selectedPath, m.editorLineNumber(), m.reviewTarget, m.treeDelegate.Config.Editor)
 			}
 
 		case "x":
@@ -364,11 +329,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.setStatus("Undo is unavailable for piped diffs")
 				return m, nil
 			}
-			if m.targetBranch != "HEAD" {
+			if m.reviewTarget != "HEAD" {
 				m.setStatus("Undo only works when comparing against HEAD")
 				return m, nil
 			}
-			undoer, ok := m.vcs.(vcs.ChangeUndoer)
+			undoer, ok := m.backend.(vcs.ChangeUndoer)
 			if !ok {
 				m.setStatus("Undo is only supported for Git right now")
 				return m, nil
@@ -382,7 +347,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.setStatus("Move the cursor to a changed line to undo it")
 				return m, nil
 			}
-			return m, undoer.UndoSelectedChangeCmd(m.targetBranch, m.selectedPath, m.rawDiffContent, m.diffCursor)
+			return m, undoer.UndoSelectedChangeCmd(m.reviewTarget, m.selectedPath, m.rawDiffContent, m.diffCursor)
 
 		case "z":
 			if m.focus == FocusDiff {
@@ -505,7 +470,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		foundHunk := false
 
 		for idx, line := range fullLines {
-			cleanLine := stripAnsi(line)
+			cleanLine := diffparse.StripANSI(line)
 			rawLine := cleanLine
 			if idx < len(rawFullLines) {
 				rawLine = rawFullLines[idx]
@@ -554,9 +519,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus(msg.Message)
 		}
 		if msg.Changed {
-			cmds = append(cmds, m.listChangedFilesCmd(m.targetBranch))
+			cmds = append(cmds, m.listChangedFilesCmd(m.reviewTarget))
 			if m.pipedDiff == "" {
-				cmds = append(cmds, m.fetchStatsCmd(m.targetBranch))
+				cmds = append(cmds, m.fetchStatsCmd(m.reviewTarget))
 			}
 		}
 	}
@@ -708,7 +673,7 @@ func (m Model) View() string {
 	}
 
 	if len(m.fileList.Items()) == 0 {
-		mainContent = m.renderEmptyState(m.width, contentHeight, "No changes found against "+m.targetBranch)
+		mainContent = m.renderEmptyState(m.width, contentHeight, "No changes found for "+m.reviewTarget)
 	} else {
 		treeStyle := PaneStyle
 		if m.focus == FocusTree {
@@ -743,11 +708,10 @@ func (m Model) View() string {
 
 			for i := start; i < end; i++ {
 				rawLine := m.diffLines[i]
-				cleanLine := stripAnsi(rawLine)
+				cleanLine := diffparse.StripANSI(rawLine)
 				line := ansi.Truncate(rawLine, maxLineWidth, "")
 
 				if strings.HasPrefix(cleanLine, "diff --git") ||
-					strings.HasPrefix(cleanLine, "diff -r ") ||
 					strings.HasPrefix(cleanLine, "index ") ||
 					strings.HasPrefix(cleanLine, "new file mode") ||
 					strings.HasPrefix(cleanLine, "old mode") ||
@@ -768,7 +732,7 @@ func (m Model) View() string {
 				if mode != "hidden" {
 					isCursor := (i == m.diffCursor)
 					if isCursor && mode == "hybrid" {
-						realLine := m.vcs.CalculateFileLine(m.diffContent, m.diffCursor)
+						realLine := diffparse.CalculateFileLine(m.diffContent, m.diffCursor)
 						numStr = fmt.Sprintf("%d", realLine)
 					} else if isCursor && mode == "relative" {
 						numStr = "0"
@@ -819,19 +783,16 @@ func (m Model) View() string {
 
 func (m Model) renderTopBar() string {
 	repo := fmt.Sprintf(" %s", m.repoName)
-	branches := fmt.Sprintf(" %s ➜ %s", m.currentBranch, m.targetBranch)
-	// Determine VCS type
-	vcsType := "git"
-	if m.vcs != nil {
-		if _, isHg := m.vcs.(vcs.HgVCS); isHg {
-			vcsType = "hg"
-		}
+	labels := fmt.Sprintf(" %s review %s", m.currentLabel, m.reviewTarget)
+	backendType := "git"
+	if m.backend != nil {
+		backendType = m.backend.Kind()
 	}
 	repoStats := ""
 	if m.statsAdded > 0 || m.statsDeleted > 0 {
 		repoStats = fmt.Sprintf(" +%d -%d", m.statsAdded, m.statsDeleted)
 	}
-	info := fmt.Sprintf("%s:%s %s%s", repo, vcsType, branches, repoStats)
+	info := fmt.Sprintf("%s:%s%s%s", repo, backendType, labels, repoStats)
 	leftSide := TopInfoStyle.Render(info)
 
 	// Right side: selected item path + stats
@@ -904,7 +865,7 @@ func (m Model) viewStatusBar() string {
 	if m.statusMessage != "" {
 		return StatusBarStyle.Width(m.width).Render(StatusKeyStyle.Render(m.statusMessage))
 	}
-	shortcuts := StatusKeyStyle.Render("? Help  x Undo Hunk  q Quit  Tab Switch")
+	shortcuts := StatusKeyStyle.Render("? Help  x Undo Hunk (Git)  q Quit  Tab Switch")
 	return StatusBarStyle.Width(m.width).Render(shortcuts)
 }
 
@@ -926,8 +887,8 @@ func (m Model) renderHelpDrawer() string {
 		HelpTextStyle.Render("e/x   Edit / Undo"),
 	)
 	col5 := lipgloss.JoinVertical(lipgloss.Left,
-		HelpTextStyle.Render("Supports Git & Hg"),
-		HelpTextStyle.Render("--vcs git/hg"),
+		HelpTextStyle.Render("Supports Git & JJ"),
+		HelpTextStyle.Render("--vcs git/jj"),
 	)
 
 	return HelpDrawerStyle.
@@ -947,16 +908,16 @@ func (m Model) renderHelpDrawer() string {
 
 func (m Model) renderEmptyState(w, h int, statusMsg string) string {
 	logo := EmptyLogoStyle.Render("difi")
-	desc := EmptyDescStyle.Render("A calm, focused way to review Git & Mercurial diffs.")
+	desc := EmptyDescStyle.Render("A calm, focused way to review Git & Jujutsu diffs.")
 	status := EmptyStatusStyle.Render(statusMsg)
 
 	usageHeader := EmptyHeaderStyle.Render("Usage Patterns")
 	cmd1 := lipgloss.NewStyle().Foreground(ColorText).Render("difi")
-	desc1 := EmptyCodeStyle.Render("Auto-detect VCS, diff against main/tip")
+	desc1 := EmptyCodeStyle.Render("Auto-detect backend, review HEAD/@")
 	cmd2 := lipgloss.NewStyle().Foreground(ColorText).Render("difi --vcs git")
 	desc2 := EmptyCodeStyle.Render("Force Git mode")
-	cmd3 := lipgloss.NewStyle().Foreground(ColorText).Render("difi --vcs hg")
-	desc3 := EmptyCodeStyle.Render("Force Mercurial mode")
+	cmd3 := lipgloss.NewStyle().Foreground(ColorText).Render("difi --vcs jj @-")
+	desc3 := EmptyCodeStyle.Render("Review a JJ revset")
 
 	usageBlock := lipgloss.JoinVertical(lipgloss.Left,
 		usageHeader,
@@ -1020,11 +981,7 @@ func (m Model) renderEmptyState(w, h int, statusMsg string) string {
 
 func (m Model) editorLineNumber() int {
 	if m.focus == FocusDiff {
-		return m.vcs.CalculateFileLine(m.diffContent, m.diffCursor)
+		return diffparse.CalculateFileLine(m.diffContent, m.diffCursor)
 	}
-	return m.vcs.CalculateFileLine(m.diffContent, 0)
-}
-
-func stripAnsi(str string) string {
-	return ansiRe.ReplaceAllString(str, "")
+	return diffparse.CalculateFileLine(m.diffContent, 0)
 }

@@ -1,7 +1,7 @@
 <a id="readme-top"></a>
 
 <h1 align="center"><code>difi</code></h1>
-<p align="center"><em>Review and refine Git diffs before you push</em></p>
+<p align="center"><em>Review and refine Git and Jujutsu diffs before you push</em></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white" />
@@ -60,16 +60,29 @@ pikaur -S difi
 
 ## Workflow
 
-- Run difi in any Git repository against main:
+- Run difi in any Git repository to review current work against `HEAD`:
 
 ```bash
 cd my-project
 difi
 ```
 
-**Piping & Alternative VCS**
+- Run difi in any Jujutsu repository to review the working-copy commit `@`:
 
-- You can also pass raw diffs directly into `difi` via standard input. This is perfect for patch files or other version control systems like Jujutsu:
+```bash
+cd my-jj-project
+difi
+```
+
+- Review a specific Jujutsu revset:
+
+```bash
+difi --vcs jj @-
+```
+
+**Piping & External Diffs**
+
+- You can also pass raw diffs directly into `difi` via standard input. This works well for patch files and external diff sources:
 
 ```bash
 # Review a saved patch file
@@ -96,7 +109,7 @@ git diff | difi
 | `?`           | Toggle help drawer                           |
 | `q`           | Quit                                         |
 
-`x` is currently available only for live Git diffs against `HEAD`. Piped diffs, Mercurial, and non-`HEAD` targets remain read-only.
+`x` is currently available only for live Git diffs against `HEAD`. Piped diffs, Jujutsu reviews, and non-`HEAD` Git targets remain read-only.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

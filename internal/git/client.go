@@ -12,13 +12,11 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	diffparse "github.com/oug-t/difi/internal/diff"
 )
 
-var (
-	ansiRe              = regexp.MustCompile(`[\x1b\x9b][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[a-zA-Z\d]*)*)?\x07)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PRZcf-ntqry=><~]))`)
-	hunkHeaderRe        = regexp.MustCompile(`^.*?@@ \-\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@`)
-	unifiedHunkHeaderRe = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
-)
+var unifiedHunkHeaderRe = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
 
 type fileVersion struct {
 	Exists  bool
@@ -41,7 +39,7 @@ func gitCmd(args ...string) *exec.Cmd {
 	return cmd
 }
 
-func getRepoRoot() string {
+func RepoRoot() string {
 	out, err := gitCmd("rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return ""
@@ -58,7 +56,7 @@ func GetCurrentBranch() string {
 }
 
 func GetRepoName() string {
-	path := getRepoRoot()
+	path := RepoRoot()
 	if path == "" {
 		return "Repo"
 	}
@@ -92,7 +90,7 @@ func DiffCmd(targetBranch, path string) tea.Cmd {
 
 		rawOut, err := gitCmd("diff", "--no-color", targetBranch, "--", path).Output()
 		if err != nil {
-			return DiffMsg{Content: string(coloredOut), RawContent: stripAnsi(string(coloredOut))}
+			return DiffMsg{Content: string(coloredOut), RawContent: diffparse.StripANSI(string(coloredOut))}
 		}
 
 		return DiffMsg{Content: string(coloredOut), RawContent: string(rawOut)}
@@ -170,52 +168,10 @@ func DiffStatsByFile(targetBranch string) (map[string][2]int, error) {
 		if parts[1] != "-" {
 			d, _ = strconv.Atoi(parts[1])
 		}
-		filePath := normalizeDiffStatPath(strings.Join(parts[2:], " "))
+		filePath := diffparse.NormalizeStatPath(strings.Join(parts[2:], " "))
 		result[filePath] = [2]int{a, d}
 	}
 	return result, nil
-}
-
-func CalculateFileLine(diffContent string, visualLineIndex int) int {
-	lines := strings.Split(diffContent, "\n")
-	if visualLineIndex >= len(lines) {
-		return 0
-	}
-
-	currentLineNo := 0
-	lastWasHunk := false
-	inHeader := true
-
-	for i := 0; i <= visualLineIndex; i++ {
-		line := lines[i]
-		matches := hunkHeaderRe.FindStringSubmatch(line)
-		if len(matches) > 1 {
-			startLine, _ := strconv.Atoi(matches[1])
-			currentLineNo = startLine
-			lastWasHunk = true
-			inHeader = false
-			continue
-		}
-
-		lastWasHunk = false
-		cleanLine := stripAnsi(line)
-
-		if inHeader {
-			continue
-		}
-
-		if strings.HasPrefix(cleanLine, " ") || strings.HasPrefix(cleanLine, "+") {
-			currentLineNo++
-		}
-	}
-
-	if currentLineNo == 0 {
-		return 1
-	}
-	if lastWasHunk {
-		return currentLineNo - 1
-	}
-	return currentLineNo - 1
 }
 
 func UndoSelectedChangeCmd(targetBranch, path, rawDiff string, cursorLine int) tea.Cmd {
@@ -306,40 +262,11 @@ func undoSelectedChange(targetBranch, path, rawDiff string, cursorLine int) Undo
 }
 
 func ParseFilesFromDiff(diffText string) []string {
-	var files []string
-	seen := make(map[string]bool)
-	lines := strings.Split(diffText, "\n")
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "diff --git a/") {
-			parts := strings.SplitN(line, " b/", 2)
-			if len(parts) == 2 {
-				file := strings.TrimPrefix(parts[0], "diff --git a/")
-				if !seen[file] {
-					seen[file] = true
-					files = append(files, file)
-				}
-			}
-		}
-	}
-	return files
+	return diffparse.ParseFiles(diffText)
 }
 
 func ExtractFileDiff(diffText, targetPath string) string {
-	lines := strings.Split(diffText, "\n")
-	var out []string
-	inTarget := false
-	targetHeader := fmt.Sprintf("diff --git a/%s b/%s", targetPath, targetPath)
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "diff --git ") {
-			inTarget = strings.HasPrefix(line, targetHeader)
-		}
-		if inTarget {
-			out = append(out, line)
-		}
-	}
-	return strings.Join(out, "\n")
+	return diffparse.ExtractFile(diffText, targetPath)
 }
 
 func parseDiffHunks(diff string) ([]diffHunk, error) {
@@ -465,7 +392,7 @@ func readGitVersion(spec string) (fileVersion, error) {
 }
 
 func readWorktreeVersion(path string) (fileVersion, error) {
-	root := getRepoRoot()
+	root := RepoRoot()
 	if root == "" {
 		return fileVersion{}, fmt.Errorf("failed to locate git repository root")
 	}
@@ -532,7 +459,7 @@ func joinLines(lines []string) []byte {
 }
 
 func writeWorktreeVersion(path string, version fileVersion, mode string) error {
-	root := getRepoRoot()
+	root := RepoRoot()
 	if root == "" {
 		return fmt.Errorf("failed to locate git repository root")
 	}
@@ -596,7 +523,7 @@ func resolveGitMode(path string) string {
 		return mode
 	}
 
-	root := getRepoRoot()
+	root := RepoRoot()
 	if root != "" {
 		if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(path))); err == nil && info.Mode()&0o111 != 0 {
 			return "100755"
@@ -671,34 +598,6 @@ func extractRenderableDiffLines(diff string) []string {
 	}
 
 	return cleanLines
-}
-
-func stripAnsi(str string) string {
-	return ansiRe.ReplaceAllString(str, "")
-}
-
-func normalizeDiffStatPath(path string) string {
-	if !strings.Contains(path, " => ") {
-		return path
-	}
-
-	if open := strings.Index(path, "{"); open != -1 {
-		if end := strings.Index(path[open:], "}"); end != -1 {
-			end += open
-			rename := path[open+1 : end]
-			parts := strings.SplitN(rename, " => ", 2)
-			if len(parts) == 2 {
-				return path[:open] + parts[1] + path[end+1:]
-			}
-		}
-	}
-
-	parts := strings.SplitN(path, " => ", 2)
-	if len(parts) == 2 {
-		return parts[1]
-	}
-
-	return path
 }
 
 type DiffMsg struct {

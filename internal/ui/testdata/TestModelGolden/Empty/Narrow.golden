@@ -1,24 +1,24 @@
-  repo-with-a-very-long-name:git  feature ➜ HEAD                      
+  repo-with-a-very-long-name:git feature review HEAD                  
                                                                       
                                                                       
                                  difi                                 
                                                                       
-         A calm, focused way to review Git & Mercurial diffs.         
+          A calm, focused way to review Git & Jujutsu diffs.          
                                                                       
-                     No changes found against HEAD                    
-                                                                      
-                                                                      
-                                                                      
-Usage Patterns                                    Navigation          
-                                                                      
-difi    Auto-detect VCS, diff against main/tip    Tab    Switch panels
-difi --vcs git    Force Git mode                  j/k    Move cursor  
-difi --vcs hg    Force Mercurial mode                                 
-                                                                      
-Neovim Integration                                                    
-                                                                      
-oug-t/difi.nvim  Install plugin                                       
-Press 'e'          Edit with context                                  
+                       No changes found for HEAD                      
                                                                       
                                                                       
- ? Help  x Undo Hunk  q Quit  Tab Switch                              
+                                                                      
+  Usage Patterns                                Navigation            
+                                                                      
+  difi    Auto-detect backend, review HEAD/@    Tab    Switch panels  
+  difi --vcs git    Force Git mode              j/k    Move cursor    
+  difi --vcs jj @-    Review a JJ revset                              
+                                                                      
+  Neovim Integration                                                  
+                                                                      
+  oug-t/difi.nvim  Install plugin                                     
+  Press 'e'          Edit with context                                
+                                                                      
+                                                                      
+ ? Help  x Undo Hunk (Git)  q Quit  Tab Switch                        

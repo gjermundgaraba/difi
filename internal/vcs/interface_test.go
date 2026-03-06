@@ -6,77 +6,46 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestVCSInterfaceConsistency(t *testing.T) {
+func TestBackendInterfaceConsistency(t *testing.T) {
 	implementations := []struct {
-		name string
-		vcs  VCS
+		name    string
+		backend Backend
+		setup   func(t *testing.T)
 	}{
-		{"Git", GitVCS{}},
-		{"Mercurial", HgVCS{}},
+		{
+			name:    "Git",
+			backend: GitBackend{},
+		},
+		{
+			name:    "JJ",
+			backend: JjBackend{},
+			setup: func(t *testing.T) {
+				t.Helper()
+				requireJujutsu(t)
+			},
+		},
 	}
 
 	for _, impl := range implementations {
 		t.Run(impl.name, func(t *testing.T) {
-			vcs := impl.vcs
+			if impl.setup != nil {
+				impl.setup(t)
+			}
 
-			t.Run("GetCurrentBranch", func(t *testing.T) {
-				var branch string
-				require.NotPanics(t, func() {
-					branch = vcs.GetCurrentBranch()
-				})
-				if branch == "" {
-					t.Logf("%s GetCurrentBranch() returned empty string", impl.name)
-				}
+			backend := impl.backend
+			require.NotEmpty(t, backend.Kind())
+			require.NotEmpty(t, backend.CurrentLabel())
+			require.NotEmpty(t, backend.RepoName())
+			require.NotEmpty(t, backend.DefaultTarget())
+
+			require.NotPanics(t, func() {
+				_, _ = backend.ListChangedFiles(backend.DefaultTarget())
 			})
-
-			t.Run("GetRepoName", func(t *testing.T) {
-				var repoName string
-				require.NotPanics(t, func() {
-					repoName = vcs.GetRepoName()
-				})
-				if repoName == "" {
-					t.Logf("%s GetRepoName() returned empty string", impl.name)
-				}
+			require.NotPanics(t, func() {
+				_, _, _ = backend.DiffStats(backend.DefaultTarget())
 			})
-
-			t.Run("ListChangedFiles", func(t *testing.T) {
-				testBranches := []string{"main", "master", "default", "HEAD"}
-				require.NotPanics(t, func() {
-					for _, branch := range testBranches {
-						_, _ = vcs.ListChangedFiles(branch)
-					}
-				})
-			})
-
-			t.Run("DiffStats", func(t *testing.T) {
-				require.NotPanics(t, func() {
-					_, _, _ = vcs.DiffStats("main")
-				})
-			})
-
-			t.Run("DiffStatsByFile", func(t *testing.T) {
-				require.NotPanics(t, func() {
-					_, _ = vcs.DiffStatsByFile("main")
-				})
-			})
-
-			t.Run("ParseFilesFromDiff", func(t *testing.T) {
-				files := vcs.ParseFilesFromDiff("")
-				require.Empty(t, files)
-				files = vcs.ParseFilesFromDiff("not a diff")
-				require.Empty(t, files)
-			})
-
-			t.Run("ExtractFileDiff", func(t *testing.T) {
-				require.Empty(t, vcs.ExtractFileDiff("", "file.txt"))
-				require.Empty(t, vcs.ExtractFileDiff("some diff", ""))
-			})
-
-			t.Run("CalculateFileLine", func(t *testing.T) {
-				line := vcs.CalculateFileLine("", 0)
-				require.Truef(t, line == 1 || line == 0, "%s CalculateFileLine('', 0) returned %d", impl.name, line)
-				line = vcs.CalculateFileLine("single line", 10)
-				require.GreaterOrEqual(t, line, 0)
+			require.NotPanics(t, func() {
+				_, _ = backend.DiffStatsByFile(backend.DefaultTarget())
 			})
 		})
 	}
@@ -90,12 +59,12 @@ func TestDiffMsgType(t *testing.T) {
 	require.NoError(t, editorMsg.Err)
 }
 
-func BenchmarkVCSDetection(b *testing.B) {
+func BenchmarkBackendDetection(b *testing.B) {
 	tempDir := b.TempDir()
 	b.Chdir(tempDir)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = DetectVCS()
+		_ = DetectBackend()
 	}
 }

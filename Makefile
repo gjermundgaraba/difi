@@ -3,7 +3,7 @@ GOLANGCI_LINT ?= golangci-lint
 BIN_DIR ?= bin
 BINARY ?= difi
 
-.PHONY: build lint lint-fix test
+.PHONY: build lint lint-fix test tidy check-all
 
 build:
 	mkdir -p $(BIN_DIR)
@@ -17,3 +17,8 @@ lint-fix:
 
 test:
 	$(GO) test ./...
+
+tidy:
+	$(GO) mod tidy
+
+check-all: tidy build test lint

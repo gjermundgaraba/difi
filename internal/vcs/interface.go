@@ -2,21 +2,20 @@ package vcs
 
 import tea "github.com/charmbracelet/bubbletea"
 
-type VCS interface {
-	GetCurrentBranch() string
-	GetRepoName() string
-	ListChangedFiles(targetBranch string) ([]string, error)
-	DiffCmd(targetBranch, path string) tea.Cmd
-	OpenEditorCmd(path string, lineNumber int, targetBranch string, editor string) tea.Cmd
-	DiffStats(targetBranch string) (added int, deleted int, err error)
-	DiffStatsByFile(targetBranch string) (map[string][2]int, error)
-	CalculateFileLine(diffContent string, visualLineIndex int) int
-	ParseFilesFromDiff(diffText string) []string
-	ExtractFileDiff(diffText, targetPath string) string
+type Backend interface {
+	Kind() string
+	CurrentLabel() string
+	RepoName() string
+	DefaultTarget() string
+	ListChangedFiles(target string) ([]string, error)
+	DiffCmd(target, path string) tea.Cmd
+	OpenEditorCmd(path string, lineNumber int, target string, editor string) tea.Cmd
+	DiffStats(target string) (added int, deleted int, err error)
+	DiffStatsByFile(target string) (map[string][2]int, error)
 }
 
 type ChangeUndoer interface {
-	UndoSelectedChangeCmd(targetBranch, path, rawDiff string, cursorLine int) tea.Cmd
+	UndoSelectedChangeCmd(target, path, rawDiff string, cursorLine int) tea.Cmd
 }
 
 type DiffMsg struct {

@@ -25,7 +25,7 @@ func run(args []string, stdin *os.File, stdout, stderr io.Writer) int {
 
 	showVersion := flags.Bool("version", false, "Show version")
 	plain := flags.Bool("plain", false, "Print a plain summary")
-	forceVCS := flags.String("vcs", "", "Force specific VCS (git or hg)")
+	forceVCS := flags.String("vcs", "", "Force specific VCS (git or jj)")
 
 	if err := flags.Parse(args); err != nil {
 		return 2
@@ -38,28 +38,24 @@ func run(args []string, stdin *os.File, stdout, stderr io.Writer) int {
 
 	pipedDiff := readPipedDiff(stdin)
 
-	var vcsClient vcs.VCS
+	var vcsClient vcs.Backend
 	if *forceVCS != "" {
 		switch *forceVCS {
 		case "git":
-			vcsClient = vcs.GitVCS{}
-		case "hg":
-			vcsClient = vcs.HgVCS{}
+			vcsClient = vcs.GitBackend{}
+		case "jj":
+			vcsClient = vcs.JjBackend{}
 		default:
-			fmt.Fprintf(stderr, "Error: unsupported VCS '%s'. Supported values: git, hg\n", *forceVCS)
+			fmt.Fprintf(stderr, "Error: unsupported VCS '%s'. Supported values: git, jj\n", *forceVCS)
 			return 1
 		}
 	} else {
-		vcsClient = vcs.DetectVCS()
+		vcsClient = vcs.DetectBackend()
 	}
 
-	target := "HEAD"
+	target := vcsClient.DefaultTarget()
 	if flags.NArg() > 0 {
 		target = flags.Arg(0)
-	}
-
-	if _, isHg := vcsClient.(vcs.HgVCS); isHg && target == "HEAD" {
-		target = "tip"
 	}
 
 	if *plain && pipedDiff == "" {
