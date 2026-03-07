@@ -1,9 +1,10 @@
 package tree
 
 import (
+	"cmp"
 	"fmt"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -113,11 +114,14 @@ func flatten(node *Node, items *[]list.Item) {
 	}
 
 	// Sort: Directories first, then alphabetical
-	sort.Slice(children, func(i, j int) bool {
-		if children[i].IsDir != children[j].IsDir {
-			return children[i].IsDir
+	slices.SortFunc(children, func(a, b *Node) int {
+		if a.IsDir != b.IsDir {
+			if a.IsDir {
+				return -1
+			}
+			return 1
 		}
-		return strings.ToLower(children[i].Name) < strings.ToLower(children[j].Name)
+		return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
 	})
 
 	for _, child := range children {

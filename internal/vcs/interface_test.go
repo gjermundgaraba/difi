@@ -39,13 +39,13 @@ func TestBackendInterfaceConsistency(t *testing.T) {
 			require.NotEmpty(t, backend.DefaultTarget())
 
 			require.NotPanics(t, func() {
-				_, _ = backend.ListChangedFiles(backend.DefaultTarget())
+				_, _ = backend.ListChangedFiles(backend.DefaultTarget(), "")
 			})
 			require.NotPanics(t, func() {
-				_, _, _ = backend.DiffStats(backend.DefaultTarget())
+				_, _, _ = backend.DiffStats(backend.DefaultTarget(), "")
 			})
 			require.NotPanics(t, func() {
-				_, _ = backend.DiffStatsByFile(backend.DefaultTarget())
+				_, _ = backend.DiffStatsByFile(backend.DefaultTarget(), "")
 			})
 		})
 	}

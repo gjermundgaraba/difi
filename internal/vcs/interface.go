@@ -7,11 +7,11 @@ type Backend interface {
 	CurrentLabel() string
 	RepoName() string
 	DefaultTarget() string
-	ListChangedFiles(target string) ([]string, error)
+	ListChangedFiles(target, path string) ([]string, error)
 	DiffCmd(target, path string) tea.Cmd
 	OpenEditorCmd(path string, lineNumber int, target string, editor string) tea.Cmd
-	DiffStats(target string) (added int, deleted int, err error)
-	DiffStatsByFile(target string) (map[string][2]int, error)
+	DiffStats(target, path string) (added int, deleted int, err error)
+	DiffStatsByFile(target, path string) (map[string][2]int, error)
 }
 
 type ChangeUndoer interface {

@@ -10,16 +10,16 @@
 │                │                                                                                  
 │                │                                                                                  
 │                │                                                                                  
-│                │       Usage Patterns                                Navigation                   
+│                │         Usage Patterns                            Navigation                     
 │                │                                                                                  
-│                │       difi    Auto-detect backend, review HEAD/@    Tab    Switch panels         
-│                │       difi --vcs git    Force Git mode              j/k    Move cursor           
-│                │       difi --vcs jj @-    Review a JJ revset                                     
+│                │         difi    Review default target             Tab    Switch panels           
+│                │         difi src    Limit review to src           j/k    Move cursor             
+│                │         difi --target @-    Review a JJ revset                                   
 │                │                                                                                  
-│                │       Neovim Integration                                                         
+│                │         Neovim Integration                                                       
 │                │                                                                                  
-│                │       oug-t/difi.nvim  Install plugin                                            
-│                │       Press 'e'          Edit with context                                       
+│                │         oug-t/difi.nvim  Install plugin                                          
+│                │         Press 'e'          Edit with context                                     
 │                │                                                                                  
 │                │                                                                                  
 │                │                                                                                  

@@ -45,6 +45,7 @@ type Model struct {
 	selectedPath string
 	currentLabel string
 	reviewTarget string
+	pathScope    string
 	repoName     string
 
 	statsAdded   int
@@ -74,14 +75,15 @@ type Model struct {
 	backend   vcs.Backend
 }
 
-func NewModel(cfg config.Config, target string, pipedDiff string, backend vcs.Backend) Model {
+func NewModel(cfg config.Config, target, pathScope string, pipedDiff string, backend vcs.Backend) Model {
 	InitStyles(cfg)
+	pathScope = diffparse.NormalizePathScope(pathScope)
 
 	var files []string
 	if pipedDiff != "" {
-		files = diffparse.ParseFiles(pipedDiff)
+		files = diffparse.FilterPaths(diffparse.ParseFiles(pipedDiff), pathScope)
 	} else {
-		files, _ = backend.ListChangedFiles(target)
+		files, _ = backend.ListChangedFiles(target, pathScope)
 	}
 	t := tree.New(files)
 	items := t.Items()
@@ -108,6 +110,7 @@ func NewModel(cfg config.Config, target string, pipedDiff string, backend vcs.Ba
 		focus:        FocusTree,
 		currentLabel: backend.CurrentLabel(),
 		reviewTarget: target,
+		pathScope:    pathScope,
 		repoName:     backend.RepoName(),
 		showHelp:     false,
 		inputBuffer:  "",
@@ -147,11 +150,11 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) fetchStatsCmd(target string) tea.Cmd {
 	return func() tea.Msg {
-		added, deleted, err := m.backend.DiffStats(target)
+		added, deleted, err := m.backend.DiffStats(target, m.pathScope)
 		if err != nil {
 			return nil
 		}
-		byFile, _ := m.backend.DiffStatsByFile(target)
+		byFile, _ := m.backend.DiffStatsByFile(target, m.pathScope)
 		return StatsMsg{Added: added, Deleted: deleted, ByFile: byFile}
 	}
 }
@@ -159,13 +162,16 @@ func (m Model) fetchStatsCmd(target string) tea.Cmd {
 func (m Model) computePipedStatsCmd() tea.Cmd {
 	return func() tea.Msg {
 		added, deleted, byFile := diffparse.Stats(m.pipedDiff)
+		if m.pathScope != "" {
+			added, deleted, byFile = diffparse.FilterStats(byFile, m.pathScope)
+		}
 		return StatsMsg{Added: added, Deleted: deleted, ByFile: byFile}
 	}
 }
 
 func (m Model) listChangedFilesCmd(target string) tea.Cmd {
 	return func() tea.Msg {
-		files, err := m.backend.ListChangedFiles(target)
+		files, err := m.backend.ListChangedFiles(target, m.pathScope)
 		return FileListMsg{Files: files, Err: err}
 	}
 }
@@ -673,7 +679,7 @@ func (m Model) View() string {
 	}
 
 	if len(m.fileList.Items()) == 0 {
-		mainContent = m.renderEmptyState(m.width, contentHeight, "No changes found for "+m.reviewTarget)
+		mainContent = m.renderEmptyState(m.width, contentHeight, m.emptyStateMessage())
 	} else {
 		treeStyle := PaneStyle
 		if m.focus == FocusTree {
@@ -913,10 +919,10 @@ func (m Model) renderEmptyState(w, h int, statusMsg string) string {
 
 	usageHeader := EmptyHeaderStyle.Render("Usage Patterns")
 	cmd1 := lipgloss.NewStyle().Foreground(ColorText).Render("difi")
-	desc1 := EmptyCodeStyle.Render("Auto-detect backend, review HEAD/@")
-	cmd2 := lipgloss.NewStyle().Foreground(ColorText).Render("difi --vcs git")
-	desc2 := EmptyCodeStyle.Render("Force Git mode")
-	cmd3 := lipgloss.NewStyle().Foreground(ColorText).Render("difi --vcs jj @-")
+	desc1 := EmptyCodeStyle.Render("Review default target")
+	cmd2 := lipgloss.NewStyle().Foreground(ColorText).Render("difi src")
+	desc2 := EmptyCodeStyle.Render("Limit review to src")
+	cmd3 := lipgloss.NewStyle().Foreground(ColorText).Render("difi --target @-")
 	desc3 := EmptyCodeStyle.Render("Review a JJ revset")
 
 	usageBlock := lipgloss.JoinVertical(lipgloss.Left,
@@ -977,6 +983,13 @@ func (m Model) renderEmptyState(w, h int, statusMsg string) string {
 	)
 
 	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, content)
+}
+
+func (m Model) emptyStateMessage() string {
+	if m.pathScope == "" {
+		return "No changes found for " + m.reviewTarget
+	}
+	return fmt.Sprintf("No changes found for %s in %s", m.reviewTarget, m.pathScope)
 }
 
 func (m Model) editorLineNumber() int {

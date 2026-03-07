@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -129,6 +130,69 @@ func Stats(diffText string) (added int, deleted int, byFile map[string][2]int) {
 	}
 
 	return added, deleted, byFile
+}
+
+func NormalizePathScope(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+
+	path = filepath.ToSlash(filepath.Clean(path))
+	if path == "." {
+		return ""
+	}
+
+	return strings.TrimPrefix(path, "./")
+}
+
+func PathMatchesScope(path, scope string) bool {
+	scope = NormalizePathScope(scope)
+	if scope == "" {
+		return true
+	}
+
+	path = NormalizePathScope(path)
+	return path == scope || strings.HasPrefix(path, scope+"/")
+}
+
+func FilterPaths(paths []string, scope string) []string {
+	scope = NormalizePathScope(scope)
+	if scope == "" {
+		return append([]string{}, paths...)
+	}
+
+	filtered := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if PathMatchesScope(path, scope) {
+			filtered = append(filtered, path)
+		}
+	}
+	return filtered
+}
+
+func FilterStats(byFile map[string][2]int, scope string) (added int, deleted int, filtered map[string][2]int) {
+	scope = NormalizePathScope(scope)
+	filtered = make(map[string][2]int)
+
+	for path, stats := range byFile {
+		if !PathMatchesScope(path, scope) {
+			continue
+		}
+		filtered[path] = stats
+		added += stats[0]
+		deleted += stats[1]
+	}
+
+	return added, deleted, filtered
+}
+
+func AppendPathScope(args []string, scope string) []string {
+	scope = NormalizePathScope(scope)
+	if scope == "" {
+		return args
+	}
+	return append(args, "--", scope)
 }
 
 func NormalizeStatPath(path string) string {

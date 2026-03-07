@@ -48,7 +48,7 @@ func TestListChangedFilesUsesTargetRevision(t *testing.T) {
 	withTempRepo(t, func(string) {
 		writeFile(t, "notes.txt", "one\n")
 
-		files, err := ListChangedFiles("@")
+		files, err := ListChangedFiles("@", "")
 		require.NoError(t, err)
 		require.Equal(t, []string{"notes.txt"}, files)
 	})
@@ -59,7 +59,7 @@ func TestDiffStatsHandlesInsertionOnlyAndDeletionOnly(t *testing.T) {
 		withTempRepo(t, func(string) {
 			writeFile(t, "notes.txt", "one\n")
 
-			added, deleted, err := DiffStats("@")
+			added, deleted, err := DiffStats("@", "")
 			require.NoError(t, err)
 			require.Equal(t, 1, added)
 			require.Zero(t, deleted)
@@ -72,7 +72,7 @@ func TestDiffStatsHandlesInsertionOnlyAndDeletionOnly(t *testing.T) {
 			runJj(t, "new", "-m", "base")
 			writeFile(t, "notes.txt", "one\n")
 
-			added, deleted, err := DiffStats("@")
+			added, deleted, err := DiffStats("@", "")
 			require.NoError(t, err)
 			require.Zero(t, added)
 			require.Equal(t, 1, deleted)
@@ -87,10 +87,30 @@ func TestDiffStatsByFileNormalizesRenamePaths(t *testing.T) {
 		runJj(t, "bookmark", "create", "main", "-r", "@")
 		require.NoError(t, os.Rename("old.txt", "new.txt"))
 
-		stats, err := DiffStatsByFile("@")
+		stats, err := DiffStatsByFile("@", "")
 		require.NoError(t, err)
 		require.Contains(t, stats, "new.txt")
 		require.Equal(t, [2]int{0, 0}, stats["new.txt"])
+	})
+}
+
+func TestPathScopedDiffQueries(t *testing.T) {
+	withTempRepo(t, func(string) {
+		writeFile(t, "src/a.txt", "one\n")
+		writeFile(t, "docs/readme.md", "base\n")
+
+		files, err := ListChangedFiles("@", "src")
+		require.NoError(t, err)
+		require.Equal(t, []string{"src/a.txt"}, files)
+
+		added, deleted, err := DiffStats("@", "src")
+		require.NoError(t, err)
+		require.Equal(t, 1, added)
+		require.Zero(t, deleted)
+
+		stats, err := DiffStatsByFile("@", "src")
+		require.NoError(t, err)
+		require.Equal(t, map[string][2]int{"src/a.txt": {1, 0}}, stats)
 	})
 }
 

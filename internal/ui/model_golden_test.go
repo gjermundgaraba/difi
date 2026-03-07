@@ -168,7 +168,7 @@ func newGoldenModel(width, height int, files []string) Model {
 		},
 	}
 
-	model := NewModel(config.Config{}, "HEAD", "", fake)
+	model := NewModel(config.Config{}, "HEAD", "", "", fake)
 	model.width = width
 	model.height = height
 	model.updateSizes()

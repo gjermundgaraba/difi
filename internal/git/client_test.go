@@ -3,7 +3,7 @@ package git
 import (
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -187,17 +187,17 @@ func TestListChangedFiles(t *testing.T) {
 		runGit(t, "add", "alpha.txt", "dir/file name.txt")
 		runGit(t, "commit", "-q", "-m", "init")
 
-		files, err := ListChangedFiles("HEAD")
+		files, err := ListChangedFiles("HEAD", "")
 		require.NoError(t, err)
 		require.Empty(t, files)
 
 		writeFile(t, "alpha.txt", "one\ntwo\n")
 		writeFile(t, "dir/file name.txt", "two\nthree\n")
 
-		files, err = ListChangedFiles("HEAD")
+		files, err = ListChangedFiles("HEAD", "")
 		require.NoError(t, err)
 
-		sort.Strings(files)
+		slices.Sort(files)
 		want := []string{"alpha.txt", "dir/file name.txt"}
 		require.Equal(t, want, files)
 	})
@@ -213,7 +213,7 @@ func TestDiffStatsIgnoresBinaryNumstatRows(t *testing.T) {
 		writeFile(t, "text.txt", "zero\none\nthree\nfour\n")
 		writeBinaryFile(t, []byte{0x00, 0x09, 0x02, 0x03, 0x04})
 
-		added, deleted, err := DiffStats("HEAD")
+		added, deleted, err := DiffStats("HEAD", "")
 		require.NoError(t, err)
 		require.Equal(t, 2, added)
 		require.Equal(t, 1, deleted)
@@ -231,13 +231,38 @@ func TestDiffStatsByFileHandlesRenamesAndBinaryFiles(t *testing.T) {
 		writeFile(t, "docs/new name.txt", "one\nTWO\n")
 		writeBinaryFile(t, []byte{0x00, 0x09, 0x02, 0x03})
 
-		stats, err := DiffStatsByFile("HEAD")
+		stats, err := DiffStatsByFile("HEAD", "")
 		require.NoError(t, err)
 
 		renamed, ok := stats["docs/new name.txt"]
 		require.Truef(t, ok, "DiffStatsByFile() missing renamed file entry, got %#v", stats)
 		require.Equal(t, [2]int{1, 1}, renamed)
 		require.Equal(t, [2]int{0, 0}, stats["image.bin"])
+	})
+}
+
+func TestPathScopedDiffQueries(t *testing.T) {
+	withTempRepo(t, func() {
+		writeFile(t, "src/a.txt", "one\n")
+		writeFile(t, "docs/readme.md", "base\n")
+		runGit(t, "add", "src/a.txt", "docs/readme.md")
+		runGit(t, "commit", "-q", "-m", "init")
+
+		writeFile(t, "src/a.txt", "one\ntwo\n")
+		writeFile(t, "docs/readme.md", "base\nnext\n")
+
+		files, err := ListChangedFiles("HEAD", "src")
+		require.NoError(t, err)
+		require.Equal(t, []string{"src/a.txt"}, files)
+
+		added, deleted, err := DiffStats("HEAD", "src")
+		require.NoError(t, err)
+		require.Equal(t, 1, added)
+		require.Zero(t, deleted)
+
+		stats, err := DiffStatsByFile("HEAD", "src")
+		require.NoError(t, err)
+		require.Equal(t, map[string][2]int{"src/a.txt": {1, 0}}, stats)
 	})
 }
 

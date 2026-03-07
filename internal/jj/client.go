@@ -67,8 +67,8 @@ func GetRepoName() string {
 	return filepath.Base(root)
 }
 
-func ListChangedFiles(target string) ([]string, error) {
-	out, err := jjCmd("diff", "-r", normalizeTarget(target), "--name-only").Output()
+func ListChangedFiles(target, path string) ([]string, error) {
+	out, err := jjCmd(diffparse.AppendPathScope([]string{"diff", "-r", normalizeTarget(target), "--name-only"}, path)...).Output()
 	if err != nil {
 		return nil, err
 	}
@@ -117,8 +117,8 @@ func OpenEditorCmd(path string, lineNumber int, target string, editor string) te
 	})
 }
 
-func DiffStats(target string) (added int, deleted int, err error) {
-	out, err := jjCmd("diff", "-r", normalizeTarget(target), "--stat").Output()
+func DiffStats(target, path string) (added int, deleted int, err error) {
+	out, err := jjCmd(diffparse.AppendPathScope([]string{"diff", "-r", normalizeTarget(target), "--stat"}, path)...).Output()
 	if err != nil {
 		return 0, 0, fmt.Errorf("jj diff stats error: %w", err)
 	}
@@ -138,8 +138,8 @@ func DiffStats(target string) (added int, deleted int, err error) {
 	return 0, 0, nil
 }
 
-func DiffStatsByFile(target string) (map[string][2]int, error) {
-	out, err := jjCmd("diff", "-r", normalizeTarget(target), "--stat").Output()
+func DiffStatsByFile(target, path string) (map[string][2]int, error) {
+	out, err := jjCmd(diffparse.AppendPathScope([]string{"diff", "-r", normalizeTarget(target), "--stat"}, path)...).Output()
 	if err != nil {
 		return nil, fmt.Errorf("jj diff stat error: %w", err)
 	}

@@ -26,6 +26,8 @@ type fakeVCS struct {
 	statsAdded   int
 	statsDeleted int
 	statsByFile  map[string][2]int
+	lastListPath string
+	lastStatPath string
 }
 
 func (f *fakeVCS) Kind() string {
@@ -43,7 +45,8 @@ func (f *fakeVCS) RepoName() string {
 }
 func (f *fakeVCS) DefaultTarget() string { return "HEAD" }
 
-func (f *fakeVCS) ListChangedFiles(target string) ([]string, error) {
+func (f *fakeVCS) ListChangedFiles(target, path string) ([]string, error) {
+	f.lastListPath = path
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
@@ -61,11 +64,13 @@ func (f *fakeVCS) OpenEditorCmd(path string, lineNumber int, target string, edit
 	return nil
 }
 
-func (f *fakeVCS) DiffStats(target string) (int, int, error) {
+func (f *fakeVCS) DiffStats(target, path string) (int, int, error) {
+	f.lastStatPath = path
 	return f.statsAdded, f.statsDeleted, nil
 }
 
-func (f *fakeVCS) DiffStatsByFile(target string) (map[string][2]int, error) {
+func (f *fakeVCS) DiffStatsByFile(target, path string) (map[string][2]int, error) {
+	f.lastStatPath = path
 	result := make(map[string][2]int, len(f.statsByFile))
 	for path, stats := range f.statsByFile {
 		result[path] = stats
@@ -100,7 +105,7 @@ func TestUndoKeyRejectsNonHeadTarget(t *testing.T) {
 		diffByPath: map[string]string{testPathA: "@@ -1 +1 @@\n-old\n+new\n"},
 	}
 
-	model := NewModel(config.Config{}, "main", "", fake)
+	model := NewModel(config.Config{}, "main", "", "", fake)
 	model.focus = FocusDiff
 	model.rawDiffContent = fake.diffByPath[testPathA]
 	model.rawDiffLines = []string{"@@ -1 +1 @@", "-old", "+new", ""}
@@ -124,7 +129,7 @@ func TestUndoKeyDispatchesToChangeUndoer(t *testing.T) {
 		result:  vcs.UndoResultMsg{Changed: true, Message: "Hunk undone"},
 	}
 
-	model := NewModel(config.Config{}, "HEAD", "", fake)
+	model := NewModel(config.Config{}, "HEAD", "", "", fake)
 	model.focus = FocusDiff
 	model.rawDiffContent = base.diffByPath[testPathA]
 	model.rawDiffLines = []string{"@@ -1 +1 @@", "-old", "+new", ""}
@@ -156,7 +161,7 @@ func TestInitBatchesDiffAndStatsCommands(t *testing.T) {
 		statsByFile:  map[string][2]int{testPathA: {2, 1}},
 	}
 
-	model := NewModel(config.Config{}, "HEAD", "", fake)
+	model := NewModel(config.Config{}, "HEAD", "", "", fake)
 	cmd := model.Init()
 	require.NotNil(t, cmd)
 
@@ -197,7 +202,7 @@ func TestApplyFileListSelectsNextFileWhenCurrentDisappears(t *testing.T) {
 		},
 	}
 
-	model := NewModel(config.Config{}, "HEAD", "", fake)
+	model := NewModel(config.Config{}, "HEAD", "", "", fake)
 	model.selectedPath = "b.go"
 	selectItemByPath(&model.fileList, model.fileList.Items(), "b.go")
 
@@ -213,7 +218,7 @@ func TestApplyFileListSelectsNextFileWhenCurrentDisappears(t *testing.T) {
 
 func TestDiffMsgUsesProvidedRawContent(t *testing.T) {
 	fake := &fakeVCS{files: []string{testPathA}}
-	model := NewModel(config.Config{}, "HEAD", "", fake)
+	model := NewModel(config.Config{}, "HEAD", "", "", fake)
 
 	coloredDiff := strings.Join([]string{
 		"diff --git a/a.go b/a.go",
@@ -252,7 +257,7 @@ func TestComputePipedStatsCmdCountsGitDiff(t *testing.T) {
 		"",
 	}, "\n")
 
-	model := NewModel(config.Config{}, "HEAD", diff, &fakeVCS{})
+	model := NewModel(config.Config{}, "HEAD", "", diff, &fakeVCS{})
 	msg := model.computePipedStatsCmd()()
 
 	statsMsg, ok := msg.(StatsMsg)
@@ -261,6 +266,48 @@ func TestComputePipedStatsCmdCountsGitDiff(t *testing.T) {
 	require.Equal(t, 2, statsMsg.Deleted)
 	require.Equal(t, [2]int{2, 1}, statsMsg.ByFile[testPathA])
 	require.Equal(t, [2]int{1, 1}, statsMsg.ByFile["b.go"])
+}
+
+func TestComputePipedStatsCmdFiltersByPathScope(t *testing.T) {
+	diff := strings.Join([]string{
+		"diff --git a/src/a.go b/src/a.go",
+		"@@ -1 +1,2 @@",
+		"-old",
+		"+new",
+		"+extra",
+		"diff --git a/docs/readme.md b/docs/readme.md",
+		"@@ -2 +2 @@",
+		"-before",
+		"+after",
+		"",
+	}, "\n")
+
+	model := NewModel(config.Config{}, "HEAD", "src", diff, &fakeVCS{})
+	msg := model.computePipedStatsCmd()()
+
+	statsMsg, ok := msg.(StatsMsg)
+	require.Truef(t, ok, "cmd() returned %T, want StatsMsg", msg)
+	require.Equal(t, 2, statsMsg.Added)
+	require.Equal(t, 1, statsMsg.Deleted)
+	require.Equal(t, map[string][2]int{"src/a.go": {2, 1}}, statsMsg.ByFile)
+}
+
+func TestNewModelFiltersPipedFilesByPathScope(t *testing.T) {
+	diff := strings.Join([]string{
+		"diff --git a/src/a.go b/src/a.go",
+		"@@ -1 +1 @@",
+		"-old",
+		"+new",
+		"diff --git a/docs/readme.md b/docs/readme.md",
+		"@@ -2 +2 @@",
+		"-before",
+		"+after",
+		"",
+	}, "\n")
+
+	model := NewModel(config.Config{}, "HEAD", "src", diff, &fakeVCS{})
+	require.Equal(t, []string{"src/a.go"}, collectFilePaths(model.fileList.Items()))
+	require.Equal(t, "src/a.go", model.selectedPath)
 }
 
 func TestUndoKeyDispatchesToAnyBackendImplementingChangeUndoer(t *testing.T) {
@@ -274,7 +321,7 @@ func TestUndoKeyDispatchesToAnyBackendImplementingChangeUndoer(t *testing.T) {
 		result:  vcs.UndoResultMsg{Changed: true, Message: "Hunk undone"},
 	}
 
-	model := NewModel(config.Config{}, "HEAD", "", fake)
+	model := NewModel(config.Config{}, "HEAD", "", "", fake)
 	model.focus = FocusDiff
 	model.rawDiffContent = base.diffByPath[testPathA]
 	model.rawDiffLines = []string{"@@ -1 +1 @@", "-old", "+new", ""}
@@ -294,7 +341,7 @@ func TestUndoKeyDispatchesToAnyBackendImplementingChangeUndoer(t *testing.T) {
 
 func TestApplyFileListClearsSelectionAndDiffWhenFilesDisappear(t *testing.T) {
 	fake := &fakeVCS{files: []string{testPathA}}
-	model := NewModel(config.Config{}, "HEAD", "", fake)
+	model := NewModel(config.Config{}, "HEAD", "", "", fake)
 	model.selectedPath = testPathA
 	model.diffContent = "@@ -1 +1 @@\n-old\n+new\n"
 	model.diffLines = []string{"@@ -1 +1 @@", "-old", "+new", ""}
@@ -317,6 +364,38 @@ func TestApplyFileListClearsSelectionAndDiffWhenFilesDisappear(t *testing.T) {
 	require.Empty(t, model.fileList.Items())
 }
 
+func TestUndoRefreshUsesPathScope(t *testing.T) {
+	base := &fakeVCS{
+		files:        []string{"src/a.go"},
+		diffByPath:   map[string]string{"src/a.go": "@@ -1 +1 @@\n-old\n+new\n"},
+		statsAdded:   1,
+		statsDeleted: 1,
+		statsByFile:  map[string][2]int{"src/a.go": {1, 1}},
+	}
+	fake := &fakeUndoVCS{
+		fakeVCS: base,
+		result:  vcs.UndoResultMsg{Changed: true},
+	}
+
+	model := NewModel(config.Config{}, "HEAD", "src", "", fake)
+	updatedModel, cmd := model.Update(vcs.UndoResultMsg{Changed: true})
+	updated := requireModel(t, updatedModel)
+	require.NotNil(t, cmd)
+	require.Equal(t, "src", updated.pathScope)
+
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	require.Truef(t, ok, "cmd() returned %T, want tea.BatchMsg", msg)
+	for _, batchCmd := range batch {
+		if batchCmd != nil {
+			_ = batchCmd()
+		}
+	}
+
+	require.Equal(t, "src", fake.lastListPath)
+	require.Equal(t, "src", fake.lastStatPath)
+}
+
 func TestLoadSelectedDiffCmdUsesExtractedPipedDiff(t *testing.T) {
 	fake := &fakeVCS{}
 
@@ -331,7 +410,7 @@ func TestLoadSelectedDiffCmdUsesExtractedPipedDiff(t *testing.T) {
 		"+new",
 		"",
 	}, "\n")
-	model := NewModel(config.Config{}, "HEAD", fullDiff, fake)
+	model := NewModel(config.Config{}, "HEAD", "", fullDiff, fake)
 	model.selectedPath = "b.go"
 
 	cmd := model.loadSelectedDiffCmd()
@@ -346,7 +425,7 @@ func TestLoadSelectedDiffCmdUsesExtractedPipedDiff(t *testing.T) {
 
 func TestFileListMsgErrorSetsStatus(t *testing.T) {
 	fake := &fakeVCS{files: []string{testPathA}}
-	model := NewModel(config.Config{}, "HEAD", "", fake)
+	model := NewModel(config.Config{}, "HEAD", "", "", fake)
 
 	updatedModel, cmd := model.Update(FileListMsg{Err: errors.New("refresh failed")})
 	updated := requireModel(t, updatedModel)
@@ -402,7 +481,7 @@ func TestChooseRefreshedPath(t *testing.T) {
 }
 
 func TestUpdateSizes(t *testing.T) {
-	model := NewModel(config.Config{}, "HEAD", "", &fakeVCS{files: []string{testPathA}})
+	model := NewModel(config.Config{}, "HEAD", "", "", &fakeVCS{files: []string{testPathA}})
 	model.width = 100
 	model.height = 40
 
@@ -426,7 +505,7 @@ func TestGetRepeatCountConsumesInputBuffer(t *testing.T) {
 }
 
 func TestHelpToggleUpdatesLayout(t *testing.T) {
-	model := NewModel(config.Config{}, "HEAD", "", &fakeVCS{files: []string{testPathA}})
+	model := NewModel(config.Config{}, "HEAD", "", "", &fakeVCS{files: []string{testPathA}})
 	model.width = 100
 	model.height = 40
 	model.updateSizes()
@@ -440,7 +519,7 @@ func TestHelpToggleUpdatesLayout(t *testing.T) {
 }
 
 func TestFocusKeysSwitchPanels(t *testing.T) {
-	model := NewModel(config.Config{}, "HEAD", "", &fakeVCS{files: []string{testPathA}})
+	model := NewModel(config.Config{}, "HEAD", "", "", &fakeVCS{files: []string{testPathA}})
 
 	updatedModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyTab})
 	updated := requireModel(t, updatedModel)
@@ -464,7 +543,7 @@ func TestUndoKeyRejectsPipedDiff(t *testing.T) {
 		"+new",
 		"",
 	}, "\n")
-	model := NewModel(config.Config{}, "HEAD", diff, fake)
+	model := NewModel(config.Config{}, "HEAD", "", diff, fake)
 	model.focus = FocusDiff
 	model.selectedPath = testPathA
 

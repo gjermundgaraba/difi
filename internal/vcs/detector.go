@@ -19,8 +19,8 @@ func (g GitBackend) DefaultTarget() string {
 	return "HEAD"
 }
 
-func (g GitBackend) ListChangedFiles(target string) ([]string, error) {
-	return git.ListChangedFiles(target)
+func (g GitBackend) ListChangedFiles(target, path string) ([]string, error) {
+	return git.ListChangedFiles(target, path)
 }
 
 func (g GitBackend) DiffCmd(target, path string) tea.Cmd {
@@ -45,12 +45,12 @@ func (g GitBackend) OpenEditorCmd(path string, lineNumber int, target string, ed
 	}
 }
 
-func (g GitBackend) DiffStats(target string) (added int, deleted int, err error) {
-	return git.DiffStats(target)
+func (g GitBackend) DiffStats(target, path string) (added int, deleted int, err error) {
+	return git.DiffStats(target, path)
 }
 
-func (g GitBackend) DiffStatsByFile(target string) (map[string][2]int, error) {
-	return git.DiffStatsByFile(target)
+func (g GitBackend) DiffStatsByFile(target, path string) (map[string][2]int, error) {
+	return git.DiffStatsByFile(target, path)
 }
 
 func (g GitBackend) UndoSelectedChangeCmd(target, path, rawDiff string, cursorLine int) tea.Cmd {
@@ -71,8 +71,8 @@ func (j JjBackend) DefaultTarget() string {
 	return "@"
 }
 
-func (j JjBackend) ListChangedFiles(target string) ([]string, error) {
-	return jj.ListChangedFiles(target)
+func (j JjBackend) ListChangedFiles(target, path string) ([]string, error) {
+	return jj.ListChangedFiles(target, path)
 }
 
 func (j JjBackend) DiffCmd(target, path string) tea.Cmd {
@@ -97,12 +97,12 @@ func (j JjBackend) OpenEditorCmd(path string, lineNumber int, target string, edi
 	}
 }
 
-func (j JjBackend) DiffStats(target string) (added int, deleted int, err error) {
-	return jj.DiffStats(target)
+func (j JjBackend) DiffStats(target, path string) (added int, deleted int, err error) {
+	return jj.DiffStats(target, path)
 }
 
-func (j JjBackend) DiffStatsByFile(target string) (map[string][2]int, error) {
-	return jj.DiffStatsByFile(target)
+func (j JjBackend) DiffStatsByFile(target, path string) (map[string][2]int, error) {
+	return jj.DiffStatsByFile(target, path)
 }
 
 func DetectBackend() Backend {

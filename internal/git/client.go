@@ -67,8 +67,8 @@ func GetRepoName() string {
 	return "Repo"
 }
 
-func ListChangedFiles(targetBranch string) ([]string, error) {
-	cmd := gitCmd("diff", "--name-only", targetBranch)
+func ListChangedFiles(targetBranch, path string) ([]string, error) {
+	cmd := gitCmd(diffparse.AppendPathScope([]string{"diff", "--name-only", targetBranch}, path)...)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -113,8 +113,8 @@ func OpenEditorCmd(path string, lineNumber int, targetBranch string, editor stri
 	})
 }
 
-func DiffStats(targetBranch string) (added int, deleted int, err error) {
-	cmd := gitCmd("diff", "--numstat", targetBranch)
+func DiffStats(targetBranch, path string) (added int, deleted int, err error) {
+	cmd := gitCmd(diffparse.AppendPathScope([]string{"diff", "--numstat", targetBranch}, path)...)
 	out, err := cmd.Output()
 	if err != nil {
 		return 0, 0, fmt.Errorf("git diff stats error: %w", err)
@@ -144,8 +144,8 @@ func DiffStats(targetBranch string) (added int, deleted int, err error) {
 	return added, deleted, nil
 }
 
-func DiffStatsByFile(targetBranch string) (map[string][2]int, error) {
-	cmd := gitCmd("diff", "--numstat", targetBranch)
+func DiffStatsByFile(targetBranch, path string) (map[string][2]int, error) {
+	cmd := gitCmd(diffparse.AppendPathScope([]string{"diff", "--numstat", targetBranch}, path)...)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("git diff numstat error: %w", err)

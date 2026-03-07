@@ -1,28 +1,28 @@
-  repo-with-a-very-long-name:git feature review HEAD                                                          
-                                                                                                              
-                                                                                                              
-                                                                                                              
-                                                                                                              
-                                                                                                              
-                                                                                                              
-                                                     difi                                                     
-                                                                                                              
-                              A calm, focused way to review Git & Jujutsu diffs.                              
-                                                                                                              
-                                           No changes found for HEAD                                          
-                                                                                                              
-                                                                                                              
-                                                                                                              
-Usage Patterns                                  Navigation                Neovim Integration                  
-                                                                                                              
-difi    Auto-detect backend, review HEAD/@      Tab    Switch panels      oug-t/difi.nvim  Install plugin     
-difi --vcs git    Force Git mode                j/k    Move cursor        Press 'e'          Edit with context
-difi --vcs jj @-    Review a JJ revset                                                                        
-                                                                                                              
-                                                                                                              
-                                                                                                              
-                                                                                                              
-                                                                                                              
-                                                                                                              
-                                                                                                              
- ? Help  x Undo Hunk (Git)  q Quit  Tab Switch                                                                
+  repo-with-a-very-long-name:git feature review HEAD                                                      
+                                                                                                          
+                                                                                                          
+                                                                                                          
+                                                                                                          
+                                                                                                          
+                                                                                                          
+                                                   difi                                                   
+                                                                                                          
+                            A calm, focused way to review Git & Jujutsu diffs.                            
+                                                                                                          
+                                         No changes found for HEAD                                        
+                                                                                                          
+                                                                                                          
+                                                                                                          
+Usage Patterns                              Navigation                Neovim Integration                  
+                                                                                                          
+difi    Review default target               Tab    Switch panels      oug-t/difi.nvim  Install plugin     
+difi src    Limit review to src             j/k    Move cursor        Press 'e'          Edit with context
+difi --target @-    Review a JJ revset                                                                    
+                                                                                                          
+                                                                                                          
+                                                                                                          
+                                                                                                          
+                                                                                                          
+                                                                                                          
+                                                                                                          
+ ? Help  x Undo Hunk (Git)  q Quit  Tab Switch                                                            

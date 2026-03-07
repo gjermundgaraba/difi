@@ -39,3 +39,46 @@ index 1234567..89abcde 100644
 		})
 	}
 }
+
+func TestNormalizePathScope(t *testing.T) {
+	require.Empty(t, NormalizePathScope(""))
+	require.Empty(t, NormalizePathScope("."))
+	require.Equal(t, "src/app", NormalizePathScope("./src/app"))
+	require.Equal(t, "src/app", NormalizePathScope("src//app"))
+}
+
+func TestPathMatchesScope(t *testing.T) {
+	require.True(t, PathMatchesScope("src/app/main.go", "src"))
+	require.True(t, PathMatchesScope("src/app/main.go", "src/app/main.go"))
+	require.False(t, PathMatchesScope("src-other/main.go", "src"))
+	require.False(t, PathMatchesScope("src/app/main.go", "docs"))
+}
+
+func TestFilterPaths(t *testing.T) {
+	paths := []string{"src/app/main.go", "src/lib/util.go", "docs/readme.md"}
+	require.Equal(t, []string{"src/app/main.go", "src/lib/util.go"}, FilterPaths(paths, "src"))
+	require.Equal(t, []string{"src/app/main.go"}, FilterPaths(paths, "src/app/main.go"))
+	require.Empty(t, FilterPaths(paths, "test"))
+}
+
+func TestFilterStats(t *testing.T) {
+	stats := map[string][2]int{
+		"src/app/main.go": {3, 1},
+		"src/lib/util.go": {2, 0},
+		"docs/readme.md":  {1, 4},
+	}
+
+	added, deleted, filtered := FilterStats(stats, "src")
+	require.Equal(t, 5, added)
+	require.Equal(t, 1, deleted)
+	require.Equal(t, map[string][2]int{
+		"src/app/main.go": {3, 1},
+		"src/lib/util.go": {2, 0},
+	}, filtered)
+}
+
+func TestAppendPathScope(t *testing.T) {
+	args := []string{"diff", "--name-only", "HEAD"}
+	require.Equal(t, args, AppendPathScope(args, ""))
+	require.Equal(t, []string{"diff", "--name-only", "HEAD", "--", "src/app"}, AppendPathScope(args, "./src//app"))
+}

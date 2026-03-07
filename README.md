@@ -74,10 +74,16 @@ cd my-jj-project
 difi
 ```
 
+- Review only changes under a specific path:
+
+```bash
+difi src
+```
+
 - Review a specific Jujutsu revset:
 
 ```bash
-difi --vcs jj @-
+difi --vcs jj --target @-
 ```
 
 **Piping & External Diffs**
@@ -93,6 +99,9 @@ jj diff --git | difi
 
 # Pipe standard git diff output
 git diff | difi
+
+# Scope a piped diff to a path
+git diff | difi src
 ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

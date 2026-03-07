@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -63,7 +64,7 @@ func TestRunPlainForcedGitListsChangedFiles(t *testing.T) {
 	})
 }
 
-func TestRunPlainUsesPositionalTarget(t *testing.T) {
+func TestRunPlainUsesTargetFlag(t *testing.T) {
 	withTempRepo(t, func() {
 		writeNotesFile(t, "one\n")
 		runGit(t, "add", "notes.txt")
@@ -75,11 +76,79 @@ func TestRunPlainUsesPositionalTarget(t *testing.T) {
 
 		var stdout bytes.Buffer
 		var stderr bytes.Buffer
-		exitCode := run([]string{"--vcs", "git", "--plain", "HEAD~1"}, nil, &stdout, &stderr)
+		exitCode := run([]string{"--vcs", "git", "--plain", "--target", "HEAD~1"}, nil, &stdout, &stderr)
 
 		require.Zero(t, exitCode, "stderr = %q", stderr.String())
 		require.Equal(t, "notes.txt\n", stdout.String())
 	})
+}
+
+func TestRunPlainUsesPositionalPath(t *testing.T) {
+	withTempRepo(t, func() {
+		writeNotesFile(t, "one\n")
+		require.NoError(t, os.MkdirAll("docs", 0o755))
+		require.NoError(t, os.WriteFile("docs/readme.md", []byte("base\n"), 0o644))
+		runGit(t, "add", "notes.txt", "docs/readme.md")
+		runGit(t, "commit", "-q", "-m", "init")
+
+		writeNotesFile(t, "one\ntwo\n")
+		require.NoError(t, os.WriteFile("docs/readme.md", []byte("base\nnext\n"), 0o644))
+
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		exitCode := run([]string{"--vcs", "git", "--plain", "docs"}, nil, &stdout, &stderr)
+
+		require.Zero(t, exitCode, "stderr = %q", stderr.String())
+		require.Equal(t, "docs/readme.md\n", stdout.String())
+	})
+}
+
+func TestRunPlainAcceptsTargetAfterPath(t *testing.T) {
+	withTempRepo(t, func() {
+		writeNotesFile(t, "one\n")
+		runGit(t, "add", "notes.txt")
+		runGit(t, "commit", "-q", "-m", "init")
+
+		writeNotesFile(t, "one\ntwo\n")
+		runGit(t, "add", "notes.txt")
+		runGit(t, "commit", "-q", "-m", "second")
+
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		exitCode := run([]string{"notes.txt", "--vcs", "git", "--plain", "--target", "HEAD~1"}, nil, &stdout, &stderr)
+
+		require.Zero(t, exitCode, "stderr = %q", stderr.String())
+		require.Equal(t, "notes.txt\n", stdout.String())
+	})
+}
+
+func TestRunPlainAllowsDashedPathAfterSeparator(t *testing.T) {
+	withTempRepo(t, func() {
+		require.NoError(t, os.MkdirAll("--target", 0o755))
+		require.NoError(t, os.WriteFile("--target/readme.md", []byte("base\n"), 0o644))
+		runGit(t, "add", "--", "--target/readme.md")
+		runGit(t, "commit", "-q", "-m", "init")
+
+		require.NoError(t, os.WriteFile("--target/readme.md", []byte("base\nnext\n"), 0o644))
+
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		exitCode := run([]string{"--vcs", "git", "--plain", "--", "--target"}, nil, &stdout, &stderr)
+
+		require.Zero(t, exitCode, "stderr = %q", stderr.String())
+		require.Equal(t, "--target/readme.md\n", stdout.String())
+	})
+}
+
+func TestRunRejectsMultiplePositionalPaths(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	exitCode := run([]string{"a", "b"}, nil, &stdout, &stderr)
+
+	require.Equal(t, 2, exitCode)
+	require.Empty(t, stdout.String())
+	require.Contains(t, stderr.String(), "expected at most one path argument")
 }
 
 func TestRunPlainForcedJjListsChangedFiles(t *testing.T) {
@@ -108,6 +177,30 @@ func TestRunPlainAutoDetectsJjRepo(t *testing.T) {
 		require.Equal(t, "notes.txt\n", stdout.String())
 		require.Empty(t, stderr.String())
 	})
+}
+
+func TestNormalizeInterspersedFlags(t *testing.T) {
+	args := []string{"src", "--plain", "--target", "HEAD~1", "--vcs=git"}
+	require.Equal(t, []string{"--plain", "--target", "HEAD~1", "--vcs=git", "src"}, normalizeInterspersedFlags(testFlags(), args))
+}
+
+func TestNormalizeInterspersedFlagsPreservesSeparator(t *testing.T) {
+	args := []string{"src", "--plain", "--", "--target", "HEAD~1"}
+	require.Equal(t, []string{"--plain", "--", "src", "--target", "HEAD~1"}, normalizeInterspersedFlags(testFlags(), args))
+}
+
+func TestNormalizeInterspersedFlagsKeepsEqualsFormSelfContained(t *testing.T) {
+	args := []string{"src", "--target=HEAD~1", "--vcs", "git"}
+	require.Equal(t, []string{"--target=HEAD~1", "--vcs", "git", "src"}, normalizeInterspersedFlags(testFlags(), args))
+}
+
+func testFlags() *flag.FlagSet {
+	flags := flag.NewFlagSet("difi", flag.ContinueOnError)
+	flags.Bool("version", false, "Show version")
+	flags.Bool("plain", false, "Print a plain summary")
+	flags.String("vcs", "", "Force specific VCS (git or jj)")
+	flags.String("target", "", "Review a specific target")
+	return flags
 }
 
 func withTempRepo(t *testing.T, fn func()) {
