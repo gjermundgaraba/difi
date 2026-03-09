@@ -8,9 +8,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/require"
 
-	"github.com/oug-t/difi/internal/config"
-	diffparse "github.com/oug-t/difi/internal/diff"
-	"github.com/oug-t/difi/internal/vcs"
+	"github.com/gjermundgaraba/difi/internal/config"
+	diffparse "github.com/gjermundgaraba/difi/internal/diff"
+	"github.com/gjermundgaraba/difi/internal/vcs"
 )
 
 const (

@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/stretchr/testify/require"
 
-	"github.com/oug-t/difi/internal/config"
-	"github.com/oug-t/difi/internal/vcs"
+	"github.com/gjermundgaraba/difi/internal/config"
+	"github.com/gjermundgaraba/difi/internal/vcs"
 )
 
 type modelGoldenCase struct {

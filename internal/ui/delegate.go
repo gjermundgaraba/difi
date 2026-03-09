@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/oug-t/difi/internal/config"
-	"github.com/oug-t/difi/internal/tree"
+	"github.com/gjermundgaraba/difi/internal/config"
+	"github.com/gjermundgaraba/difi/internal/tree"
 )
 
 type TreeDelegate struct {

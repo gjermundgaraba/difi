@@ -1,6 +1,8 @@
   repo-with-a-very-long-name:git feature review HEAD                  
                                                                       
                                                                       
+                                                                      
+                                                                      
                                  difi                                 
                                                                       
           A calm, focused way to review Git & Jujutsu diffs.          
@@ -15,10 +17,8 @@
     difi src    Limit review to src           j/k    Move cursor      
     difi --target @-    Review a JJ revset                            
                                                                       
-    Neovim Integration                                                
                                                                       
-    oug-t/difi.nvim  Install plugin                                   
-    Press 'e'          Edit with context                              
+                                                                      
                                                                       
                                                                       
  ? Help  x Undo Hunk (Git)  q Quit  Tab Switch                        

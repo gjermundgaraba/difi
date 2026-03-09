@@ -2,11 +2,13 @@
 ╭────────────────╮                                                                                  
 │ ▾  docs       │                                                                                  
 │   ▾  sub      │                                                                                  
-│        api.go │                                      difi                                        
+│        api.go │                                                                                  
 │      guide.md │                                                                                  
-│ ▾  src        │               A calm, focused way to review Git & Jujutsu diffs.                 
+│ ▾  src        │                                      difi                                        
 │   ▾  app      │                                                                                  
-│        main.… │                                 Directory: docs                                  
+│        main.… │               A calm, focused way to review Git & Jujutsu diffs.                 
+│                │                                                                                  
+│                │                                 Directory: docs                                  
 │                │                                                                                  
 │                │                                                                                  
 │                │                                                                                  
@@ -16,10 +18,8 @@
 │                │         difi src    Limit review to src           j/k    Move cursor             
 │                │         difi --target @-    Review a JJ revset                                   
 │                │                                                                                  
-│                │         Neovim Integration                                                       
 │                │                                                                                  
-│                │         oug-t/difi.nvim  Install plugin                                          
-│                │         Press 'e'          Edit with context                                     
+│                │                                                                                  
 │                │                                                                                  
 │                │                                                                                  
 │                │                                                                                  

@@ -9,9 +9,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/oug-t/difi/internal/config"
-	"github.com/oug-t/difi/internal/ui"
-	"github.com/oug-t/difi/internal/vcs"
+	"github.com/gjermundgaraba/difi/internal/config"
+	"github.com/gjermundgaraba/difi/internal/ui"
+	"github.com/gjermundgaraba/difi/internal/vcs"
 )
 
 var version = "dev"

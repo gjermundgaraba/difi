@@ -1,4 +1,4 @@
-module github.com/oug-t/difi
+module github.com/gjermundgaraba/difi
 
 go 1.25.6
 

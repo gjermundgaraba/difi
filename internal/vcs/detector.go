@@ -3,8 +3,8 @@ package vcs
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/oug-t/difi/internal/git"
-	"github.com/oug-t/difi/internal/jj"
+	"github.com/gjermundgaraba/difi/internal/git"
+	"github.com/gjermundgaraba/difi/internal/jj"
 )
 
 type (

@@ -146,7 +146,7 @@ formatters:
       sections:
         - standard
         - default
-        - prefix(github.com/oug-t/difi)
+        - prefix(github.com/gjermundgaraba/difi)
         - blank
         - dot
       custom-order: true

@@ -12,10 +12,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/oug-t/difi/internal/config"
-	diffparse "github.com/oug-t/difi/internal/diff"
-	"github.com/oug-t/difi/internal/tree"
-	"github.com/oug-t/difi/internal/vcs"
+	"github.com/gjermundgaraba/difi/internal/config"
+	diffparse "github.com/gjermundgaraba/difi/internal/diff"
+	"github.com/gjermundgaraba/difi/internal/tree"
+	"github.com/gjermundgaraba/difi/internal/vcs"
 )
 
 type Focus int
@@ -944,34 +944,15 @@ func (m Model) renderEmptyState(w, h int, statusMsg string) string {
 		lipgloss.JoinHorizontal(lipgloss.Left, key2, "    ", keyDesc2),
 	)
 
-	nvimHeader := EmptyHeaderStyle.Render("Neovim Integration")
-	nvim1 := lipgloss.NewStyle().Foreground(ColorText).Render("oug-t/difi.nvim")
-	nvimDesc1 := EmptyCodeStyle.Render("Install plugin")
-	nvim2 := lipgloss.NewStyle().Foreground(ColorText).Render("Press 'e'")
-	nvimDesc2 := EmptyCodeStyle.Render("Edit with context")
-
-	nvimBlock := lipgloss.JoinVertical(lipgloss.Left,
-		nvimHeader,
-		lipgloss.JoinHorizontal(lipgloss.Left, nvim1, "  ", nvimDesc1),
-		lipgloss.JoinHorizontal(lipgloss.Left, nvim2, "          ", nvimDesc2),
-	)
-
 	var guides string
 	if w > 80 {
 		guides = lipgloss.JoinHorizontal(lipgloss.Top,
 			usageBlock,
 			lipgloss.NewStyle().Width(6).Render(""),
 			navBlock,
-			lipgloss.NewStyle().Width(6).Render(""),
-			nvimBlock,
 		)
 	} else {
-		topRow := lipgloss.JoinHorizontal(lipgloss.Top, usageBlock, lipgloss.NewStyle().Width(4).Render(""), navBlock)
-		guides = lipgloss.JoinVertical(lipgloss.Left,
-			topRow,
-			lipgloss.NewStyle().Height(1).Render(""),
-			nvimBlock,
-		)
+		guides = lipgloss.JoinHorizontal(lipgloss.Top, usageBlock, lipgloss.NewStyle().Width(4).Render(""), navBlock)
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Center,

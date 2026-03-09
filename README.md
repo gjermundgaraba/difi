@@ -1,110 +1,55 @@
-<a id="readme-top"></a>
+# difi
 
-<h1 align="center"><code>difi</code></h1>
-<p align="center"><em>Review and refine Git and Jujutsu diffs before you push</em></p>
+> A personal fork of [oug-t/difi](https://github.com/oug-t/difi) — a terminal diff viewer built with Go and Bubble Tea.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white" />
-  <img src="https://img.shields.io/badge/Bubble_Tea-E2386F?style=for-the-badge&logo=tea&logoColor=white" />
-  <img src="https://img.shields.io/github/license/oug-t/difi?style=for-the-badge&color=2e3440" />
-</p>
+The original tool is excellent. This fork exists to add [Jujutsu (jj)](https://github.com/martinvonz/jj) support and personal functionality that fits my workflow.
 
-<p align="center">
-  <img src= "https://github.com/user-attachments/assets/3695cfd2-148c-463d-9630-547d152adde0" alt="difi_demo" />
-</p>
+## What's different from upstream
 
-## Why difi?
-
-**git diff** shows changes. **difi** helps you _review_ them.
-
-- ⚡️ **Instant** — Built in Go. Launches immediately with no daemon or indexing.
-- 🎨 **Structured** — A clean file tree and focused diffs for fast mental parsing.
-- 🧠 **Editor-Aware** — Jump straight to the exact line in `nvim`/`vim` to fix issues.
-- ⌨️ **Keyboard-First** — Navigate everything with `h j k l`. No mouse required.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+- Jujutsu (`jj`) support — review the working-copy commit or any revset
+- Personal tweaks and additions over time
 
 ## Installation
 
-#### Homebrew (macOS & Linux)
-
 ```bash
-brew install difi
+go install github.com/gjermundgaraba/difi/cmd/difi@latest
 ```
 
-#### Go Install
+Or clone and build:
 
 ```bash
-go install github.com/oug-t/difi/cmd/difi@latest
+git clone https://github.com/gjermundgaraba/difi
+cd difi
+go build ./cmd/difi
 ```
 
-#### AUR (Arch Linux)
+## Usage
 
-**Binary (pre-built):**
-
-```bash
-pikaur -S difi-bin
-```
-
-**Build from source:**
+Run in any Git or Jujutsu repository:
 
 ```bash
-pikaur -S difi
-```
-
-#### Manual (Linux / Windows)
-
-- Download the binary from Releases and add it to your `$PATH`.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-## Workflow
-
-- Run difi in any Git repository to review current work against `HEAD`:
-
-```bash
-cd my-project
 difi
 ```
 
-- Run difi in any Jujutsu repository to review the working-copy commit `@`:
-
-```bash
-cd my-jj-project
-difi
-```
-
-- Review only changes under a specific path:
+Scope to a path:
 
 ```bash
 difi src
 ```
 
-- Review a specific Jujutsu revset:
+Review a specific Jujutsu revset:
 
 ```bash
 difi --vcs jj --target @-
 ```
 
-**Piping & External Diffs**
-
-- You can also pass raw diffs directly into `difi` via standard input. This works well for patch files and external diff sources:
+Pipe a diff directly:
 
 ```bash
-# Review a saved patch file
-cat changes.patch | difi
-
-# Review changes in Jujutsu (jj)
 jj diff --git | difi
-
-# Pipe standard git diff output
 git diff | difi
-
-# Scope a piped diff to a path
-git diff | difi src
+cat changes.patch | difi
 ```
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Controls
 
@@ -118,101 +63,17 @@ git diff | difi src
 | `?`           | Toggle help drawer                           |
 | `q`           | Quit                                         |
 
-`x` is currently available only for live Git diffs against `HEAD`. Piped diffs, Jujutsu reviews, and non-`HEAD` Git targets remain read-only.
+`x` is currently available only for live Git diffs against `HEAD`. Piped diffs, Jujutsu reviews, and non-`HEAD` Git targets are read-only.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-## Integrations
-
-#### vim-fugitive
-
-- **The "Unix philosophy" approach:** Uses the industry-standard Git wrapper to provide a robust, side-by-side editing experience.
-- **Side-by-Side Editing:** Instantly opens a vertical split (:Gvdiffsplit!) against the index.
-- **Merge Conflicts:** Automatically detects conflicts and opens a 3-way merge view for resolution.
-- **Config**: Add the line below to if using **lazy.nvim**.
-
-```lua
-{
-  "tpope/vim-fugitive",
-  cmd = { "Gvdiffsplit", "Git" }, -- Add this line
-}
-```
-
-<p align="left"> 
-  <a href="https://github.com/tpope/vim-fugitive.git">
-    <img src="https://img.shields.io/badge/Supports-vim--fugitive-4d4d4d?style=for-the-badge&logo=vim&logoColor=white" alt="Supports vim-fugitive" />
-  </a>
-</p>
-
-#### difi.nvim
-
-Get the ultimate review experience with **[difi.nvim](https://github.com/oug-t/difi.nvim)**.
-
-- **Auto-Open:** Instantly jumps to the file and line when you press `e` in the CLI.
-- **Visual Diff:** Renders diffs inline with familiar green/red highlights—just like reviewing a PR on GitHub.
-- **Interactive Review:** Restore a "deleted" line by simply removing the `-` marker. Discard an added line by deleting it entirely.
-- **Context Aware:** Automatically syncs with your `difi` session target.
-
-<p align="left">
-  <a href="https://github.com/oug-t/difi.nvim">
-    <img src="https://img.shields.io/badge/Get_difi.nvim-57A143?style=for-the-badge&logo=neovim&logoColor=white" alt="Get difi.nvim" />
-  </a>
-</p>
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-## Git Integration
-
-To use `difi` as a native git command (e.g., `git difi`), add it as an alias in your global git config:
+## Development
 
 ```bash
-git config --global alias.difi '!difi'
-```
-
-Now you can run it directly from git:
-
-```bash
-git difi
-```
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-## Contributing
-
-```bash
-git clone https://github.com/oug-t/difi
-cd difi
 go test ./...
 go run cmd/difi/main.go
 ```
 
-To refresh golden files after intentional UI rendering changes:
+To regenerate golden files after intentional UI changes:
 
 ```bash
 go test ./... -update
 ```
-
-Contributions are especially welcome in:
-
-- diff.nvim rendering edge cases
-- UI polish and accessibility
-- Windows support
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-## Star History
-
-<a href="https://star-history.com/#oug-t/difi&Date">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=oug-t/difi&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=oug-t/difi&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=oug-t/difi&type=Date" />
-    </picture>
-  </a>
-</div>
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
----
-
-<p align="center"> Made with ❤️ by <a href="https://github.com/oug-t">oug-t</a> </p>

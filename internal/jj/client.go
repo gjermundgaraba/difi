@@ -12,7 +12,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	diffparse "github.com/oug-t/difi/internal/diff"
+	diffparse "github.com/gjermundgaraba/difi/internal/diff"
 )
 
 var summaryRe = regexp.MustCompile(`(\d+) insertion[s]?\(\+\), (\d+) deletion[s]?\(\-\)`)
